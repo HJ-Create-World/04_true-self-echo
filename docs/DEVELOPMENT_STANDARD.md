@@ -155,6 +155,30 @@ git push origin main
 > ⚠️ **推送前必须清空代理环境变量**。这是本机的已知坑，
 > 端口每次随机变化，不可硬编码规避。
 
+> ⚠️ **另一个已知坑：`git status` 显示 `[origin/main] [gone]`**
+>
+> 表现：推送明明成功（`EXIT=0`，远程 `ls-remote` 能看到正确的提交），
+> 但 `git status` 一直显示 `[gone]`，`git for-each-ref refs/remotes` 输出为空。
+>
+> 根因：本地 `.git/refs/remotes/origin/` 目录下的跟踪引用没落盘
+> （`git fetch` 报 `* [new branch] main -> origin/main` 但文件不存在）。
+>
+> 验证远程是否真的推上去了：
+> ```powershell
+> git ls-remote --heads origin    # 看远程 HEAD 哈希是否 == 本地 git rev-parse HEAD
+> ```
+>
+> 修复（远程没问题时只需补本地引用）：
+> ```powershell
+> $sha = (git rev-parse HEAD).Trim()
+> New-Item -ItemType Directory -Force -Path ".git\refs\remotes\origin" | Out-Null
+> [System.IO.File]::WriteAllText((Join-Path (Resolve-Path ".git").Path "refs\remotes\origin\main"), $sha + "`n", (New-Object System.Text.UTF8Encoding($false)))
+> git status -sb    # 应显示 ## main...origin/main（无 [gone]）
+> ```
+>
+> 注意：`New-Item` 建目录后**不要在同一毫秒内写文件**，
+> 否则会报「未能找到路径的一部分」。分两条命令执行。
+
 ### 2.4 提交信息规范（Conventional Commits）
 
 ```
