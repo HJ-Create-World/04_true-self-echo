@@ -159,9 +159,12 @@ git push origin main
 >
 > 表现：推送明明成功（`EXIT=0`，远程 `ls-remote` 能看到正确的提交），
 > 但 `git status` 一直显示 `[gone]`，`git for-each-ref refs/remotes` 输出为空。
+> **每推送一次就会复现一次**，属于本机环境的持续性问题，不是操作失误。
 >
 > 根因：本地 `.git/refs/remotes/origin/` 目录下的跟踪引用没落盘
 > （`git fetch` 报 `* [new branch] main -> origin/main` 但文件不存在）。
+>
+> **这不影响推送结果** —— 远程始终是正确的最新提交。只是本地状态显示不准。
 >
 > 验证远程是否真的推上去了：
 > ```powershell
@@ -172,12 +175,13 @@ git push origin main
 > ```powershell
 > $sha = (git rev-parse HEAD).Trim()
 > New-Item -ItemType Directory -Force -Path ".git\refs\remotes\origin" | Out-Null
+> # 分两条命令执行，让目录创建落盘
 > [System.IO.File]::WriteAllText((Join-Path (Resolve-Path ".git").Path "refs\remotes\origin\main"), $sha + "`n", (New-Object System.Text.UTF8Encoding($false)))
 > git status -sb    # 应显示 ## main...origin/main（无 [gone]）
 > ```
 >
-> 注意：`New-Item` 建目录后**不要在同一毫秒内写文件**，
-> 否则会报「未能找到路径的一部分」。分两条命令执行。
+> 注意：`New-Item` 建目录后**不要在同一条命令里立刻写文件**，
+> 否则会报「未能找到路径的一部分」。分两步执行。
 
 ### 2.4 提交信息规范（Conventional Commits）
 
