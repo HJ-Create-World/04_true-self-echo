@@ -1,0 +1,50 @@
+# 依赖与构建产物
+node_modules/
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+
+# 日志
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# 环境变量（绝不提交任何密钥）
+.env
+.env.*
+!.env.example
+*.local
+
+# 编辑器与系统
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Vite
+.vite/
+
+# 运行期数据（本地对话记录、人格存档等，可能含隐私）
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# 临时验证脚本（用完即删，不要留在仓库）
+_test.*
+_temp.*
+_tmp.*
+scratch/
+
+# 模型文件（体积巨大，绝不入库）
+*.gguf
+*.safetensors
+*.bin
+*.onnx
+models/
