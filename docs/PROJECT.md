@@ -38,11 +38,23 @@
 | 需求定义 | ✅ 完成（三轮澄清 + 定稿） |
 | 技术选型 | ✅ 完成（架构 B + 结构化记忆） |
 | 交付计划 | ✅ 完成 |
-| .gitignore / .gitattributes | ✅ 完成 |
-| Phase 0 人格提取验证 | 📋 **待执行（下一步）** |
+| 开发规范 | ✅ 完成（v1.0，可复用） |
+| 决策记录 D001–D005 | ✅ 完成 |
+| 工程配置（.gitignore / .gitattributes） | ✅ 完成 |
+| **GitHub 仓库** | ✅ **已建并推送** → https://github.com/HJ-Create-World/04_persona-forge |
+| **Phase 0 人格提取验证** | 📋 **待执行（下一步）** |
 | 项目脚手架 | ⬜ 未开始 |
 | 代码 | ⬜ 未开始（本阶段不写代码） |
-| GitHub 远程仓库 | ⬜ 待创建 |
+
+**仓库信息**
+
+| 项 | 值 |
+|---|---|
+| 远程地址 | `https://github.com/HJ-Create-World/04_persona-forge.git` |
+| 可见性 | **私有**（隐私考虑，投料内容可能含私人对话） |
+| 默认分支 | `main` |
+| 首次提交 | `7def71c` — chore: 项目立项，完成需求定义与开发规范 |
+| 本地路径 | `D:\01_HJ_Work\00_Person\04_Project\04_persona-forge` |
 
 ---
 
