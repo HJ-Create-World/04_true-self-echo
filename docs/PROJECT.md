@@ -42,7 +42,7 @@
 | 决策记录 D001–D005 | ✅ 完成 |
 | 工程配置（.gitignore / .gitattributes） | ✅ 完成 |
 | **GitHub 仓库** | ✅ **已建并推送** → https://github.com/HJ-Create-World/04_persona-forge |
-| **Phase 0 人格提取验证** | 📋 **待执行（下一步）** |
+| **Phase 0 人格提取验证** | ⏳ **材料已就绪，待执行（下一步）** → 见 `docs/phase0/执行卡片.md` |
 | 项目脚手架 | ⬜ 未开始 |
 | 代码 | ⬜ 未开始（本阶段不写代码） |
 
@@ -150,6 +150,11 @@ persona-forge/
 │   ├── PLAN.md                 交付计划与里程碑
 │   ├── TOOLING.md              Skill / MCP 需求清单
 │   ├── PHASE0_人格提取验证.md   Phase 0 验证脚本
+│   ├── phase0/                 Phase 0 可执行材料 ← 现在该看这里
+│   │   ├── 执行卡片.md            操作步骤（只看这一份）
+│   │   ├── A-角色台词.md          测试素材
+│   │   ├── Prompt-提取.md         两个提取 Prompt
+│   │   └── B-闭环验证.md          扮演测试脚本
 │   ├── decisions/              决策记录
 │   └── specs/                  子模块详细设计
 ```
