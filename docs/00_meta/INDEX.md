@@ -83,6 +83,8 @@ owner: HJ
 | `竞品-elysia.skill.md` | active | 43★ 角色扮演项目实测 |
 | `AI陪伴市场调研.md` | active | 市场产品、付费、合规 |
 | `开源生态盘点.md` | active | 5 类开源项目横向对比 |
+| `执行侧干预_调研报告.md` | active | **Phase 1 技术路线的业界依据**。sycophancy / lost-in-the-middle / 三条干预路线对比（回答「为什么 System Prompt 规则不生效」） |
+| `前端风格与UI库选型.md` | active | 找风格的网站清单 + Vue3 组件库对比（回答「去哪找 UI 参考」「选哪个库」） |
 
 ### 📁 `06_ops/` — 操作手册
 | 文件 | status | 用途 |
@@ -122,6 +124,10 @@ owner: HJ
 | git 推送报错了 | `06_ops/RUNBOOK.md` |
 | 某个黑话是什么意思 | `00_meta/GLOSSARY.md` |
 | 写新文档要怎么起头 | `00_meta/DOC_STANDARD.md` |
+| **去哪找前端 UI 风格参考** | `05_research/前端风格与UI库选型.md` §一 |
+| **UI 库选哪个** | `05_research/前端风格与UI库选型.md` §二（⚠️ 尚未决策，需开 ADR） |
+| **为什么 System Prompt 里的规则不生效** | `05_research/执行侧干预_调研报告.md` §问题 2 |
+| **Phase 1 干预方案有哪几条路** | `05_research/执行侧干预_调研报告.md` §问题 3 |
 
 ---
 
