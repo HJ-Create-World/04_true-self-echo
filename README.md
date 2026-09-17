@@ -27,12 +27,12 @@
 
 | 你是 | 先读 |
 |---|---|
-| **第一次接触这个项目** | [`docs/PROJECT.md`](docs/PROJECT.md) ← **唯一入口，先读这个** |
-| 想知道要做什么、不做什么 | [`docs/SPEC.md`](docs/SPEC.md) |
-| 想知道什么时候做什么 | [`docs/PLAN.md`](docs/PLAN.md) |
-| 想知道为什么这么定 | [`docs/decisions/`](docs/decisions/) |
-| 要动手写代码了 | [`docs/DEVELOPMENT_STANDARD.md`](docs/DEVELOPMENT_STANDARD.md) |
-| 想知道要装什么工具 | [`docs/TOOLING.md`](docs/TOOLING.md) |
+| **第一次接触这个项目** | [`docs/01_product/PRODUCT.md`](docs/01_product/PRODUCT.md) ← **唯一入口，先读这个** |
+| 想知道要做什么、不做什么 | [`docs/01_product/SPEC.md`](docs/01_product/SPEC.md) |
+| 想知道什么时候做什么 | [`docs/01_product/PLAN.md`](docs/01_product/PLAN.md) |
+| 想知道为什么这么定 | [`docs/02_decisions/`](docs/02_decisions/) |
+| 要动手写代码了 | [`docs/06_ops/DEV_STANDARD.md`](docs/06_ops/DEV_STANDARD.md) |
+| 想知道要装什么工具 | [`docs/06_ops/TOOLING.md`](docs/06_ops/TOOLING.md) |
 
 ---
 
@@ -48,4 +48,4 @@ Vue 3 · TypeScript · Vite · Pinia · IndexedDB · Node.js（薄后端）
 
 > 所有规矩服务于同一件事：**提升审查能力，而不是提升生成速度。**
 
-AI 写得比你看得快，项目就会崩。详见 [开发规范](docs/DEVELOPMENT_STANDARD.md)。
+AI 写得比你看得快，项目就会崩。详见 [开发规范](docs/06_ops/DEV_STANDARD.md)。

@@ -32,7 +32,7 @@
 
 GitHub 连接器**只有读权限**，任何写操作（建仓库、提交文件）都会返回 403 `Resource not accessible by integration`。
 
-**推代码一律走本地 git**，配置方案见 `02_llm-viz-lab/docs/GIT_SETUP.md`。这个坑已经踩过，别再试。
+**推代码一律走本地 git**，配置方案见 `06_ops/RUNBOOK.md`。这个坑已经踩过，别再试。
 
 ### 不需要额外安装的
 
@@ -92,7 +92,7 @@ GitHub 连接器**只有读权限**，任何写操作（建仓库、提交文件
 | 1 | 一个能用的 LLM API（带 Key） | 已经确认：本地 + 云端双选，云端走 OpenAI 兼容接口 |
 | 2 | 一个本地模型运行时（可选） | Ollama，装了就能用，不装也不影响主流程 |
 | 3 | 一个称手的 Prompt 调试环境 | 网页版 LLM 就够，Phase 0 全程用它 |
-| 4 | **AI 协作的规矩**（最重要的「工具」） | [DEVELOPMENT_STANDARD.md](./DEVELOPMENT_STANDARD.md) §五 |
+| 4 | **AI 协作的规矩**（最重要的「工具」） | [DEV_STANDARD.md](./DEV_STANDARD.md) §五 |
 
 第 4 条是真的「工具」——它决定了每次和 AI 协作产出的代码是资产还是负债。
 

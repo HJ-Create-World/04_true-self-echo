@@ -1,4 +1,4 @@
-# DEVELOPMENT_STANDARD.md —— 项目开发规范
+# 项目开发规范
 
 > **这份文档不只是约束本项目。它的目标是成为一份可复用的范式，
 > 用于任何"个人用 AI 辅助开发"的项目，防止烂尾与失控。**
@@ -142,7 +142,7 @@ git init -b main
 
 **上传时必须提供准确的更改描述** —— 不许写"update"，要写清「做了什么、为什么」。
 
-**推送命令**（本机环境特化，详见 `docs/GIT_SETUP.md`）：
+**推送命令**（本机环境特化，详见 `docs/06_ops/RUNBOOK.md`）：
 
 ```powershell
 $env:HTTP_PROXY=""; $env:HTTPS_PROXY=""; $env:ALL_PROXY=""
@@ -205,7 +205,7 @@ feat: 实现人格档案的冻结层/演化层数据结构
 演化层存储对用户的认知与关系状态，每次对话后生成快照。
 双层结构的目的是隔离"人格漂移"，只允许演化层发生变化。
 
-详见 docs/decisions/D002-核心抽象-人格档案.md
+详见 docs/02_decisions/D002-核心抽象-人格档案.md
 ```
 
 ### 2.5 必须的配置文件
@@ -260,13 +260,13 @@ Move-Item "临时文件" "$env:TEMP\"
 
 | 层 | 文件 | 职责 | 更新频率 |
 |---|---|---|---|
-| **入口层** | `PROJECT.md` | 项目全貌 + 当前状态 | **每次阶段推进** |
-| **规范层** | `DEVELOPMENT_STANDARD.md` | 协作规则 | 很少变 |
-| **内容层** | `SPEC.md` / `PLAN.md` / `decisions/` | 需求、计划、决策 | 按需更新 |
+| **入口层** | `01_product/PRODUCT.md` / `00_meta/STATUS.md` | 项目全貌 + 当前状态 | **每次阶段推进** |
+| **规范层** | `06_ops/DEV_STANDARD.md` | 协作规则 | 很少变 |
+| **内容层** | `01_product/SPEC.md` / `01_product/PLAN.md` / `02_decisions/` | 需求、计划、决策 | 按需更新 |
 
 **铁律**：
 
-> **任何时刻，新人只读 `PROJECT.md` 就能知道项目在哪一步。**
+> **任何时刻，新人只读 `01_product/PRODUCT.md` + `00_meta/STATUS.md` 就能知道项目在哪一步。**
 
 ### 3.2 单一信息源（Single Source of Truth）
 
@@ -274,9 +274,9 @@ Move-Item "临时文件" "$env:TEMP\"
 
 | 信息 | 唯一位置 | 别处怎么处理 |
 |---|---|---|
-| 当前阶段 | `PROJECT.md` 第二节 | 其他地方**不重复**，需要时引用 |
-| 功能清单 | `SPEC.md` | `PLAN.md` 只写"哪些功能在哪阶段"，不重复列清单 |
-| 决策原因 | `decisions/DXXX-*.md` | 其他文档**只写结论 + 链接** |
+| 当前阶段 | `00_meta/STATUS.md` 第二节 | 其他地方**不重复**，需要时引用 |
+| 功能清单 | `01_product/SPEC.md` | `01_product/PLAN.md` 只写"哪些功能在哪阶段"，不重复列清单 |
+| 决策原因 | `02_decisions/DXXX-*.md` | 其他文档**只写结论 + 链接** |
 
 **反例**（会导致失真的做法）：
 - 在 SPEC、PLAN、PROJECT 里各写一遍功能清单 → 改了一个忘了另一个
@@ -284,7 +284,7 @@ Move-Item "临时文件" "$env:TEMP\"
 
 ### 3.3 决策记录（ADR）格式
 
-**每个重大决策一个文件**，放在 `docs/decisions/`。
+**每个重大决策一个文件**，放在 `docs/02_decisions/`。
 
 ```markdown
 # DXXX-决策标题
@@ -391,7 +391,7 @@ Move-Item "临时文件" "$env:TEMP\"
 **✅ 要这样说**：
 - "在这个数据结构下（附上定义），实现一个函数，输入 X 输出 Y"
 - "这个函数有 bug：输入 A 时输出 B，期望输出 C，请定位问题"
-- "按 `docs/specs/memory.md` 里的接口定义实现 `extractFacts`"
+- "按 `docs/03_specs/memory-schema.md` 里的接口定义实现 `extractFacts`"（⚠️ **文件待建**，见 `docs/00_meta/INDEX.md` 登记项）
 
 **核心**：**AI 需要约束，不是自由。** 你给的约束越具体，产出越可控。
 
@@ -418,15 +418,16 @@ Move-Item "临时文件" "$env:TEMP\"
 **长对话会导致上下文爆炸。** 处理方式：
 
 - **一个任务一个对话** —— 做完一个功能，开新对话
-- **交接靠文档，不靠对话历史** —— 这就是 `PROJECT.md` 存在的意义
+- **交接靠文档，不靠对话历史** —— 这就是 `01_product/PRODUCT.md` + `00_meta/STATUS.md` 存在的意义
 - **把决策写进文档** —— 否则新对话里的 AI 会重新问你一遍，或者更糟，推翻你的决策
 
 **本项目专用交接话术**（复制给新对话的 AI）：
 
 ```
-请先读 docs/PROJECT.md 了解项目现状，然后读
-docs/DEVELOPMENT_STANDARD.md 了解协作规范。
-不要推翻 docs/decisions/ 里的已定决策，
+请先读 docs/01_product/PRODUCT.md 了解项目全貌，
+再读 docs/00_meta/STATUS.md 了解当前进度，然后读
+docs/06_ops/DEV_STANDARD.md 了解协作规范。
+不要推翻 docs/02_decisions/ 里的已定决策，
 除非你能说明为什么应该改。
 ```
 
