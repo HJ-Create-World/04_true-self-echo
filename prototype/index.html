@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>persona-forge · 投料页原型 v0.2</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+// 水彩画风 Token —— 取值唯一来源：docs/06_ops/DESIGN_STANDARD.md §一
+// 通过 tailwind.config 注入，避免在 class 里重复硬编码魔法值
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        // 衬线优先中文字体栈，模拟纸面书写感（规范 §1.4）
+        serif: ['Georgia', '"Songti SC"', '"SimSun"', '"Noto Serif SC"', 'serif'],
+      },
+      boxShadow: {
+        // 弥散阴影：大模糊 + 低透明度，模拟颜料在纸上扩散（规范 §1.3）
+        paper: '0 4px 20px rgba(74,111,165,0.12)',
+        bloom: '0 10px 40px rgba(74,111,165,0.35)',
+      },
+      transitionDuration: { '400': '400ms' },
+    }
+  }
+}
+</script>
+<style>
+  /* ═══════════════════════════════════════════════════════════════
+     主题色域系统
+     ───────────────────────────────────────────────────────────────
+     规范依据（docs/06_ops/DESIGN_STANDARD.md §1.1 备注）：
+       "透明度上限 0.15 用于装饰元素 … 背景纹理、水彩晕染等纯装饰层
+        不透明度不得超过 0.15，不得压过内容可读性"
+     因此本实现不改 opacity，改的是 ①②③ 三项：
+       ① 色相          —— 四套情绪各自换一套「一天中的时光色」
+       ② 空间分布      —— 光斑位置与半径整体重排，四套布局互不相同
+       ③ 混合模式      —— soft-light 让纸白参与融合，色彩渗透而非平铺
+     ═══════════════════════════════════════════════════════════════ */
+
+  html { scroll-behavior: smooth; }
+
+  /* ① 四套情绪色板：每套 4 个光斑的「色相 / 位置 / 半径」 */
+  :root {
+    --stain-1: #4a6fa5; --p1: 18% 22%; --r1: 46%;
+    --stain-2: #e8a87c; --p2: 82% 12%; --r2: 42%;
+    --stain-3: #85cdca; --p3: 68% 84%; --r3: 44%;
+    --stain-4: #c38d94; --p4: 24% 88%; --r4: 38%;
+
+    --field-opacity: 0.12;   /* 硬上限 0.15，不加不减 */
+    --texture-opacity: 0.035; /* 纸纹：极淡，只负责「摸得着」不负责「看得见」 */
+  }
+
+  /* 黎明 —— 冷蓝破晓 + 一点暖橘微光，上轻下重 */
+  [data-theme="dawn"] {
+    --stain-1: #6b8fc4; --p1: 12% 8%;  --r1: 52%;
+    --stain-2: #f0b894; --p2: 88% 6%;  --r2: 40%;
+    --stain-3: #85cdca; --p3: 78% 92%; --r3: 40%;
+    --stain-4: #8fa8cc; --p4: 20% 96%; --r4: 46%;
+  }
+
+  /* 潮汐 —— 青绿主导，横向流动，中间亮带 */
+  [data-theme="tide"] {
+    --stain-1: #5a9fa8; --p1: 6% 46%;  --r1: 54%;
+    --stain-2: #85cdca; --p2: 94% 34%; --r2: 50%;
+    --stain-3: #6f9fd8; --p3: 42% 4%;  --r3: 44%;
+    --stain-4: #d4a373; --p4: 56% 96%; --r4: 34%;
+  }
+
+  /* 黄昏 —— 蜜桃与玫瑰为主，暖重压在下方，顶上是浅沙 */
+  [data-theme="dusk"] {
+    --stain-1: #e8a87c; --p1: 14% 74%; --r1: 54%;
+    --stain-2: #c38d94; --p2: 84% 88%; --r2: 46%;
+    --stain-3: #d4a373; --p3: 52% 8%;  --r3: 42%;
+    --stain-4: #6b8fc4; --p4: 92% 40%; --r4: 34%;
+  }
+
+  /* 花园 —— 青绿在左、浅粉在右，粉质最软、对比最低 */
+  [data-theme="garden"] {
+    --stain-1: #a8ddd6; --p1: 16% 44%; --r1: 58%;
+    --stain-2: #efc8cd; --p2: 84% 52%; --r2: 54%;
+    --stain-3: #cfe4c8; --p3: 48% 88%; --r3: 40%;
+    --stain-4: #f3d9b8; --p4: 58% 10%; --r4: 36%;
+  }
+
+  /* ② 柔光色域层（主角级，但不是靠高不透明度堆出来的） */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: var(--field-opacity);
+    mix-blend-mode: soft-light;
+    background-image:
+      radial-gradient(circle at var(--p1), var(--stain-1) 0%, transparent var(--r1)),
+      radial-gradient(circle at var(--p2), var(--stain-2) 0%, transparent var(--r2)),
+      radial-gradient(circle at var(--p3), var(--stain-3) 0%, transparent var(--r3)),
+      radial-gradient(circle at var(--p4), var(--stain-4) 0%, transparent var(--r4));
+    transition: opacity 900ms ease-in-out;
+  }
+
+  /* ③ 纸纹层：纯白噪点，5 层错位叠出纤维感 */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: var(--texture-opacity);
+    background-image:
+      radial-gradient(circle at 18% 32%, #ffffff 0%, transparent 0.9%),
+      radial-gradient(circle at 62% 14%, #ffffff 0%, transparent 0.7%),
+      radial-gradient(circle at 84% 68%, #ffffff 0%, transparent 1.1%),
+      radial-gradient(circle at 34% 82%, #ffffff 0%, transparent 0.8%),
+      radial-gradient(circle at 52% 52%, #ffffff 0%, transparent 0.6%);
+    background-size: 180px 180px, 240px 240px, 200px 200px, 260px 260px, 150px 150px;
+  }
+
+  body > * { position: relative; z-index: 1; }
+
+  /* 色域整体过渡：换主题时不闪、不跳 */
+  body { transition: background-color 900ms ease-in-out; }
+
+  /* 键盘可访问性：尊重系统「减弱动态效果」偏好（规范 §可访问性） */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+</style>
+</head>
+<body data-theme="garden"
+      class="min-h-screen bg-[#faf8f5] font-serif font-light tracking-wide text-[#3a3a3a] antialiased">
+
+<!-- ══════════════ 顶部导航 ══════════════ -->
+<header class="mx-auto max-w-4xl px-6 pt-12 pb-8 md:pt-20">
+  <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <span class="grid w-10 h-10 place-items-center rounded-2xl bg-[#4a6fa5]/10 text-lg text-[#4a6fa5]">✦</span>
+      <span class="text-base text-[#4a6fa5]">persona-forge</span>
+    </div>
+    <span class="rounded-full bg-[#d4a373]/15 px-4 py-1.5 text-sm text-[#a97c50]">
+      原型 · v0.2
+    </span>
+  </div>
+</header>
+
+<main class="mx-auto max-w-4xl px-6 pb-24">
+
+  <!-- ══════════════ 标题区 ══════════════ -->
+  <section class="mb-14">
+    <h1 class="mb-5 text-3xl leading-snug text-[#4a6fa5] md:text-4xl">
+      喂给它一个人说过的话<br class="hidden md:block">它就能像那个人一样和你聊天
+    </h1>
+    <p class="max-w-xl text-lg leading-relaxed text-[#3a3a3a]/70">
+      把素材贴进来，它提取出一份人格档案。<br>
+      你能看见它记住了什么、变成了什么样。
+    </p>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════
+       调色板情绪 —— 页面氛围切换
+       ══════════════════════════════════════════════════════════ -->
+  <section class="mb-16" aria-labelledby="mood-heading">
+    <h2 id="mood-heading" class="mb-2 text-2xl leading-tight text-[#3a3a3a]">
+      调色板<span class="text-[#4a6fa5]">情绪</span>
+    </h2>
+    <p class="mb-6 text-base leading-relaxed text-[#3a3a3a]/60">
+      每种情绪融合点缀洗涤剂，唤起一天中不同的时光。
+    </p>
+
+    <!-- 情绪胶囊组：role=radiogroup + aria-checked 保证键盘与读屏可用 -->
+    <div id="mood-group" role="radiogroup" aria-labelledby="mood-heading"
+         class="flex flex-wrap gap-4">
+
+      <button type="button" role="radio" aria-checked="false" data-mood="dawn"
+              class="mood-chip rounded-full px-7 py-2.5 text-base text-[#3a3a3a]/55
+                     transition-all duration-500 ease-in-out
+                     active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+        黎明
+      </button>
+      <button type="button" role="radio" aria-checked="false" data-mood="tide"
+              class="mood-chip rounded-full px-7 py-2.5 text-base text-[#3a3a3a]/55
+                     transition-all duration-500 ease-in-out
+                     active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+        潮汐
+      </button>
+      <button type="button" role="radio" aria-checked="false" data-mood="dusk"
+              class="mood-chip rounded-full px-7 py-2.5 text-base text-[#3a3a3a]/55
+                     transition-all duration-500 ease-in-out
+                     active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+        黄昏
+      </button>
+      <button type="button" role="radio" aria-checked="true" data-mood="garden"
+              class="mood-chip rounded-full px-7 py-2.5 text-base text-[#3a3a3a]/55
+                     transition-all duration-500 ease-in-out
+                     active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+        花园
+      </button>
+
+    </div>
+  </section>
+
+  <!-- ══════════════ 一、投料输入区 ══════════════ -->
+  <section class="mb-12">
+    <div class="mb-6 flex items-center gap-3">
+      <span class="grid w-7 h-7 place-items-center rounded-full bg-[#4a6fa5] text-xs text-white">1</span>
+      <h2 class="text-xl text-[#4a6fa5]">投料</h2>
+    </div>
+
+    <!-- 来源选择：选中态用蜜桃（规范 §五 第二主色） -->
+    <div class="mb-5 flex flex-wrap gap-3">
+      <button class="rounded-2xl bg-[#e8a87c]/20 px-5 py-2.5 text-base text-[#b06d3f]
+                     shadow-paper ring-1 ring-[#e8a87c]/40
+                     transition-all duration-500 ease-in-out
+                     hover:shadow-bloom hover:bg-[#e8a87c]/25 hover:scale-[1.02]
+                     active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+        剧情台词
+      </button>
+      <button class="rounded-2xl bg-white/60 px-5 py-2.5 text-base text-[#3a3a3a]/70
+                     shadow-paper
+                     transition-all duration-500 ease-in-out
+                     hover:shadow-bloom hover:bg-white/80 hover:scale-[1.02]
+                     active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+        聊天记录
+      </button>
+      <button class="rounded-2xl bg-white/60 px-5 py-2.5 text-base text-[#3a3a3a]/70
+                     shadow-paper
+                     transition-all duration-500 ease-in-out
+                     hover:shadow-bloom hover:bg-white/80 hover:scale-[1.02]
+                     active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+        手写整理
+      </button>
+    </div>
+
+    <!-- 输入框 -->
+    <div class="rounded-3xl bg-white/60 p-1 shadow-paper
+                transition-all duration-500 ease-in-out
+                focus-within:shadow-bloom">
+      <textarea rows="9"
+        placeholder="把这个人说过的话贴进来。越多越好 —— 台词、对话记录、随手记下的句子都行。"
+        class="w-full resize-none rounded-[1.375rem] bg-transparent px-6 py-5 text-base leading-relaxed
+               text-[#3a3a3a] placeholder:text-[#3a3a3a]/35
+               focus:outline-none"></textarea>
+    </div>
+
+    <!-- 字数反馈 + 操作 -->
+    <div class="mt-5 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-baseline gap-2 text-sm text-[#3a3a3a]/55">
+        <span class="text-2xl text-[#4a6fa5]">1,240</span>
+        <span>字 · 约 35 轮对话</span>
+      </div>
+      <button class="rounded-2xl bg-[#4a6fa5] px-8 py-3 text-base text-white
+                     shadow-paper
+                     transition-all duration-500 ease-in-out
+                     hover:shadow-bloom hover:bg-[#4a6fa5]/90 hover:scale-[1.02]
+                     active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+        开始提取
+      </button>
+    </div>
+  </section>
+
+  <!-- ══════════════ 二、提取进度态 ══════════════ -->
+  <section class="mb-12">
+    <div class="mb-6 flex items-center gap-3">
+      <span class="grid w-7 h-7 place-items-center rounded-full bg-[#4a6fa5]/25 text-xs text-[#4a6fa5]">2</span>
+      <h2 class="text-xl text-[#4a6fa5]/70">提取中</h2>
+    </div>
+
+    <div class="rounded-3xl bg-white/60 p-7 shadow-paper md:p-9">
+
+      <!-- 三步进度：完成用青绿，进行中用蓝灰，未开始用低透明 -->
+      <ol class="mb-8 space-y-4">
+        <li class="flex items-center gap-4">
+          <span class="grid w-7 h-7 shrink-0 place-items-center rounded-full bg-[#85cdca]/25 text-sm text-[#4a9b97]">✓</span>
+          <span class="text-base text-[#3a3a3a]/70">读取素材 · 18,420 字</span>
+        </li>
+        <li class="flex items-center gap-4">
+          <span class="grid w-7 h-7 shrink-0 place-items-center rounded-full bg-[#4a6fa5] text-sm text-white">
+            <span class="block w-2.5 h-2.5 animate-pulse rounded-full bg-white"></span>
+          </span>
+          <span class="text-base text-[#4a6fa5]">提取语言特征 · 句长分布 / 语癖 / 标点习惯</span>
+        </li>
+        <li class="flex items-center gap-4">
+          <span class="grid w-7 h-7 shrink-0 place-items-center rounded-full bg-[#3a3a3a]/8 text-sm text-[#3a3a3a]/30">3</span>
+          <span class="text-base text-[#3a3a3a]/35">构建人格档案</span>
+        </li>
+      </ol>
+
+      <!-- 进度条：弥散光晕而非实色条 -->
+      <div class="h-1.5 overflow-hidden rounded-full bg-[#4a6fa5]/10">
+        <div class="h-full w-2/3 rounded-full bg-gradient-to-r from-[#85cdca] to-[#4a6fa5]
+                    transition-all duration-500 ease-in-out"></div>
+      </div>
+      <p class="mt-4 text-sm text-[#3a3a3a]/50">
+        预计还需 15 秒 · 素材足够，可提取 6 个维度
+      </p>
+    </div>
+  </section>
+
+  <!-- ══════════════ 三、人格档案结果 ══════════════ -->
+  <section class="mb-12">
+    <div class="mb-6 flex items-center gap-3">
+      <span class="grid w-7 h-7 place-items-center rounded-full bg-[#85cdca]/25 text-xs text-[#4a9b97]">✓</span>
+      <h2 class="text-xl text-[#4a6fa5]">人格档案</h2>
+      <span class="rounded-full bg-[#85cdca]/20 px-3 py-1 text-xs text-[#4a9b97]">已生成</span>
+    </div>
+
+    <!-- 档案头卡 -->
+    <div class="mb-6 rounded-3xl bg-white/60 p-7 shadow-paper md:p-8
+                transition-all duration-500 ease-in-out
+                hover:shadow-bloom hover:bg-white/80">
+      <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h3 class="mb-2 text-2xl text-[#4a6fa5]">爱莉希雅</h3>
+          <p class="text-sm text-[#3a3a3a]/55">
+            虚拟角色 · 来源：剧情台词 · 30,214 字素材
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <span class="rounded-full bg-[#d4a373]/15 px-3.5 py-1.5 text-xs text-[#a97c50]">冻结层 8 项</span>
+          <span class="rounded-full bg-[#e8a87c]/15 px-3.5 py-1.5 text-xs text-[#b06d3f]">演化层 3 项</span>
+        </div>
+      </div>
+
+      <!-- 冻结层：长文本密排区，这是可读性的真正考验 -->
+      <div class="space-y-5 border-t border-[#4a6fa5]/15 pt-6">
+
+        <div>
+          <h4 class="mb-2.5 text-sm text-[#4a6fa5]/75">语言风格</h4>
+          <p class="text-base leading-relaxed text-[#3a3a3a]/85">
+            句子平均 12.3 字，跨度 8.4–18.6 字。惯用破折号延展语气，句末喜用「呢」「哦」软化。
+            极少使用感叹号 —— 情绪高昂时反而拉长句子，用「呀」而非「啊」。
+          </p>
+        </div>
+
+        <div>
+          <h4 class="mb-2.5 text-sm text-[#4a6fa5]/75">内在矛盾</h4>
+          <p class="mb-2 text-base leading-relaxed text-[#3a3a3a]/85">
+            <span class="text-[#c38d94]">表面</span>　轻快跳脱，把一切说得像玩笑
+          </p>
+          <p class="text-base leading-relaxed text-[#3a3a3a]/85">
+            <span class="text-[#4a6fa5]">内里</span>　极度清醒，早已知晓结局
+          </p>
+          <p class="mt-2.5 text-sm leading-relaxed text-[#3a3a3a]/60">
+            统一点：用玩笑承担重量 —— 说到沉重处会主动岔开，但不回避
+          </p>
+        </div>
+
+        <div>
+          <h4 class="mb-2.5 text-sm text-[#4a6fa5]/75">约束（禁止说出来）</h4>
+          <ul class="space-y-1.5 text-base leading-relaxed text-[#3a3a3a]/85">
+            <li class="flex gap-2.5">
+              <span class="text-[#c38d94]">✕</span>
+              <span>禁止直接陈述自己的情感状态 —— 只能从动作、物件、玩笑里漏出来</span>
+            </li>
+            <li class="flex gap-2.5">
+              <span class="text-[#c38d94]">✕</span>
+              <span>禁止解释自己为什么这样说，不自我剖析</span>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 评分卡：六维用蓝灰，红线命中用玫瑰 -->
+    <div class="rounded-3xl bg-white/60 p-7 shadow-paper md:p-8">
+      <h3 class="mb-6 text-lg text-[#4a6fa5]">
+        扮演评分
+        <span class="ml-2 text-sm text-[#3a3a3a]/50">四轮对话法 · §九 冻结版标准</span>
+      </h3>
+
+      <div class="mb-6 space-y-3.5">
+        <div class="flex items-center gap-4">
+          <span class="w-24 shrink-0 text-sm text-[#3a3a3a]/70">语言风格还原</span>
+          <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[#4a6fa5]/10">
+            <div class="h-full w-[80%] rounded-full bg-[#4a6fa5] transition-all duration-500 ease-in-out"></div>
+          </div>
+          <span class="w-10 shrink-0 text-right text-sm text-[#4a6fa5]">4/5</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="w-24 shrink-0 text-sm text-[#3a3a3a]/70">情绪适配</span>
+          <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[#4a6fa5]/10">
+            <div class="h-full w-[60%] rounded-full bg-[#4a6fa5] transition-all duration-500 ease-in-out"></div>
+          </div>
+          <span class="w-10 shrink-0 text-right text-sm text-[#4a6fa5]">3/5</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="w-24 shrink-0 text-sm text-[#3a3a3a]/70">人格一致性</span>
+          <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[#4a6fa5]/10">
+            <div class="h-full w-[60%] rounded-full bg-[#4a6fa5] transition-all duration-500 ease-in-out"></div>
+          </div>
+          <span class="w-10 shrink-0 text-right text-sm text-[#4a6fa5]">3/5</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="w-24 shrink-0 text-sm text-[#3a3a3a]/70">反差·层次感</span>
+          <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[#4a6fa5]/10">
+            <div class="h-full w-[60%] rounded-full bg-[#4a6fa5] transition-all duration-500 ease-in-out"></div>
+          </div>
+          <span class="w-10 shrink-0 text-right text-sm text-[#4a6fa5]">3/5</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="w-24 shrink-0 text-sm text-[#3a3a3a]/70">主动性</span>
+          <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[#4a6fa5]/10">
+            <div class="h-full w-[40%] rounded-full bg-[#4a6fa5] transition-all duration-500 ease-in-out"></div>
+          </div>
+          <span class="w-10 shrink-0 text-right text-sm text-[#4a6fa5]">2/5</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="w-24 shrink-0 text-sm text-[#3a3a3a]/70">无 AI 味</span>
+          <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[#4a6fa5]/10">
+            <div class="h-full w-[60%] rounded-full bg-[#4a6fa5] transition-all duration-500 ease-in-out"></div>
+          </div>
+          <span class="w-10 shrink-0 text-right text-sm text-[#4a6fa5]">3/5</span>
+        </div>
+      </div>
+
+      <!-- 红线区块：这是 Phase 0 实测的痛点，用玫瑰标出 -->
+      <div class="rounded-2xl bg-[#c38d94]/8 p-5">
+        <h4 class="mb-3 text-sm text-[#c38d94]">两条红线（一票否决）</h4>
+        <ul class="space-y-2 text-sm">
+          <li class="flex items-center justify-between gap-4">
+            <span class="text-[#3a3a3a]/75">不得「变激动」</span>
+            <span class="text-[#4a9b97]">未触发</span>
+          </li>
+          <li class="flex items-center justify-between gap-4">
+            <span class="text-[#3a3a3a]/75">不得「追问并长篇安慰」</span>
+            <span class="text-[#c38d94]">第 4 轮触发</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="mt-5 flex items-baseline justify-between border-t border-[#4a6fa5]/15 pt-5">
+        <span class="text-sm text-[#3a3a3a]/60">总分</span>
+        <span class="text-2xl text-[#4a6fa5]">18<span class="text-base text-[#3a3a3a]/40">/30</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ 四、导出 / 分享边界 ══════════════ -->
+  <section>
+    <div class="mb-6 flex items-center gap-3">
+      <span class="grid w-7 h-7 place-items-center rounded-full bg-[#4a6fa5]/15 text-xs text-[#4a6fa5]">4</span>
+      <h2 class="text-xl text-[#4a6fa5]">导出与分享</h2>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+
+      <!-- 虚拟角色：可用 -->
+      <div class="rounded-3xl bg-white/60 p-7 shadow-paper
+                  transition-all duration-500 ease-in-out
+                  hover:shadow-bloom hover:bg-white/80">
+        <div class="mb-4 flex items-center gap-2.5">
+          <span class="grid w-6 h-6 place-items-center rounded-full bg-[#85cdca]/25 text-xs text-[#4a9b97]">✓</span>
+          <h3 class="text-base text-[#4a9b97]">虚拟角色 · 可分享</h3>
+        </div>
+        <p class="mb-5 text-sm leading-relaxed text-[#3a3a3a]/65">
+          生成分享链接，别人可以直接和它对话。档案以只读形式导出。
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <button class="rounded-2xl bg-[#4a6fa5] px-5 py-2.5 text-sm text-white
+                         shadow-paper
+                         transition-all duration-500 ease-in-out
+                         hover:shadow-bloom hover:bg-[#4a6fa5]/90 hover:scale-[1.02]
+                         active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+            生成分享链接
+          </button>
+          <button class="rounded-2xl bg-white/60 px-5 py-2.5 text-sm text-[#3a3a3a]/80
+                         shadow-paper
+                         transition-all duration-500 ease-in-out
+                         hover:shadow-bloom hover:bg-white/80 hover:scale-[1.02]
+                         active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30">
+            导出 JSON
+          </button>
+        </div>
+      </div>
+
+      <!-- 真实人物：入口不存在（规范要求是「不渲染」，不是灰掉） -->
+      <div class="rounded-3xl bg-white/40 p-7 shadow-paper">
+        <div class="mb-4 flex items-center gap-2.5">
+          <span class="grid w-6 h-6 place-items-center rounded-full bg-[#c38d94]/20 text-xs text-[#c38d94]">—</span>
+          <h3 class="text-base text-[#c38d94]">真实人物 · 不提供</h3>
+        </div>
+        <p class="text-sm leading-relaxed text-[#3a3a3a]/65">
+          素材是他人的聊天记录，当事人没有同意。<br>
+          可以自己对话、本地保存，但<b class="font-normal text-[#c38d94]">没有分享入口</b>
+          —— 不是禁用，是根本不存在。
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<!-- ══════════════ 页脚 ══════════════ -->
+<footer class="mx-auto max-w-4xl px-6 pb-16">
+  <div class="border-t border-[#4a6fa5]/15 pt-6">
+    <p class="text-xs leading-relaxed text-[#3a3a3a]/40">
+      静态原型 · 仅验证视觉规范（<span class="text-[#4a6fa5]/60">docs/06_ops/DESIGN_STANDARD.md</span>）<br>
+      无真实逻辑，无后端调用。颜色、圆角、阴影、动效取值全部来自规范 §一。
+    </p>
+  </div>
+</footer>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   调色板情绪切换
+   ───────────────────────────────────────────────────────────────
+   切换的是 :root 上的 data-theme，CSS 变量随之换值，
+   body::before 的 4 层 radial-gradient 自动重排 + 900ms 缓动过渡。
+   ═══════════════════════════════════════════════════════════════ */
+(function () {
+  var MOODS = {
+    dawn:   { label: '黎明' },
+    tide:   { label: '潮汐' },
+    dusk:   { label: '黄昏' },
+    garden: { label: '花园' }
+  };
+
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.mood-chip'));
+
+  /* 选中态：用水彩语汇（蜜桃浅底 + 极细描边 + 弥散阴影），
+     不用参考图里的黑色粗边框 —— 那命中规范 §三 禁止项「硬边框」 */
+  var SELECTED = ['bg-[#e8a87c]/22', 'text-[#b06d3f]', 'ring-1', 'ring-[#e8a87c]/45',
+                  'shadow-paper', 'hover:shadow-bloom', 'hover:bg-[#e8a87c]/28'];
+  var UNSELECTED = ['bg-[#e8a87c]/10', 'text-[#3a3a3a]/55', 'hover:bg-[#e8a87c]/18'];
+
+  function paint(activeMood) {
+    chips.forEach(function (chip) {
+      var on = chip.dataset.mood === activeMood;
+      chip.setAttribute('aria-checked', on ? 'true' : 'false');
+
+      SELECTED.forEach(function (c) { chip.classList.toggle(c, on); });
+      UNSELECTED.forEach(function (c) { chip.classList.toggle(c, !on); });
+
+      /* 选中项字重保持 font-light，只靠底色和颜色拉层次（规范 §1.4 禁止加粗） */
+      chip.classList.toggle('scale-[1.02]', false);
+    });
+  }
+
+  function apply(mood) {
+    if (!MOODS[mood]) return;
+    document.body.dataset.theme = mood;
+    paint(mood);
+  }
+
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () { apply(chip.dataset.mood); });
+    /* 键盘左右键在胶囊组内移动（radiogroup 语义的标准交互） */
+    chip.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      e.preventDefault();
+      var i = chips.indexOf(chip);
+      var next = e.key === 'ArrowRight'
+        ? (i + 1) % chips.length
+        : (i - 1 + chips.length) % chips.length;
+      chips[next].focus();
+      apply(chips[next].dataset.mood);
+    });
+  });
+
+  apply(document.body.dataset.theme || 'garden');
+})();
+</script>
+
+</body>
+</html>
