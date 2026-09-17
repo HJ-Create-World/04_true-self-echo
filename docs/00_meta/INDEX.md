@@ -70,7 +70,7 @@ owner: HJ
 | `phase0/测试结果-纯台词对照.md` | active | 第一轮纯台词对照原始数据（材料层级理论第一手证据） |
 | `phase0/测试结果-v1.md` | active | 第一轮原始数据（v1 总结式输出） |
 | `phase0/测试结果-v2.md` | active | 第一轮原始数据（v2 考证式输出） |
-| `phase0/执行卡片.md` | archived | 操作手册（已执行完毕，保留作 E4/E5/E6 流程模板） |
+| `phase0/执行卡片.md` | superseded | 操作手册（已执行完毕，保留作 E4/E5/E6 流程模板） |
 
 ### 📁 `05_research/` — 外部调研
 | 文件 | status | 用途 |

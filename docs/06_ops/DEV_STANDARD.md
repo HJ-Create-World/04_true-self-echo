@@ -1,3 +1,12 @@
+---
+title: 项目开发规范
+type: guide
+status: active
+updated: 2026-09-17
+owner: HJ
+related: [../00_meta/DOC_STANDARD, RUNBOOK, TOOLING, ../01_product/PLAN]
+---
+
 # 项目开发规范
 
 > **这份文档不只是约束本项目。它的目标是成为一份可复用的范式，

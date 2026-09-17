@@ -1,3 +1,12 @@
+---
+title: persona-forge · 人格工坊
+type: product
+status: active
+updated: 2026-09-17
+owner: HJ
+related: [docs/01_product/PRODUCT, docs/00_meta/STATUS]
+---
+
 # persona-forge · 人格工坊
 
 > 一个既好用、又能让你看见它内心在发生什么的 AI 伙伴。
@@ -9,17 +18,10 @@
 
 ## 当前状态
 
-| 阶段 | 状态 |
-|---|---|
-| 需求定义 | ✅ 完成 |
-| 技术选型 | ✅ 完成 |
-| 交付计划 | ✅ 完成 |
-| 开发规范 | ✅ 完成 |
-| **Phase 0 人格提取验证** | 📋 **待执行（下一步）** |
-| 代码脚手架 | ⬜ 未开始 |
-| GitHub 仓库 | ⬜ 未开始 |
+**一句话**：需求与文档体系已定稿，Phase 0 人格提取验证已跑完两轮，
+**下一步是搭脚手架进入 Phase 1（执行侧干预）**。
 
-**这个项目目前还没有一行代码。** 下一步是跑 Phase 0 验证。
+> ⚠️ **进度不要写在这里。唯一信息源是 [`docs/00_meta/STATUS.md`](docs/00_meta/STATUS.md)。**
 
 ---
 
@@ -27,12 +29,15 @@
 
 | 你是 | 先读 |
 |---|---|
-| **第一次接触这个项目** | [`docs/01_product/PRODUCT.md`](docs/01_product/PRODUCT.md) ← **唯一入口，先读这个** |
+| **AI / 第一次接手项目** | [`docs/00_meta/AGENTS.md`](docs/00_meta/AGENTS.md) ← **AI 入口** |
+| **第一次接触这个项目** | [`docs/01_product/PRODUCT.md`](docs/01_product/PRODUCT.md) ← **产品全貌，先读这个** |
+| 想知道现在到哪一步了 | [`docs/00_meta/STATUS.md`](docs/00_meta/STATUS.md) |
 | 想知道要做什么、不做什么 | [`docs/01_product/SPEC.md`](docs/01_product/SPEC.md) |
 | 想知道什么时候做什么 | [`docs/01_product/PLAN.md`](docs/01_product/PLAN.md) |
 | 想知道为什么这么定 | [`docs/02_decisions/`](docs/02_decisions/) |
 | 要动手写代码了 | [`docs/06_ops/DEV_STANDARD.md`](docs/06_ops/DEV_STANDARD.md) |
 | 想知道要装什么工具 | [`docs/06_ops/TOOLING.md`](docs/06_ops/TOOLING.md) |
+| 找不到某份文档 | [`docs/00_meta/INDEX.md`](docs/00_meta/INDEX.md) ← **文档登记表** |
 
 ---
 

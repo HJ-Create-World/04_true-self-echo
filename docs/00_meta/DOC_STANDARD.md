@@ -105,13 +105,31 @@ owner: HJ
 ```yaml
 ---
 title: 人类可读的标题
-type: adr | spec | lab-report | research | guide | index | status | product
+type: adr | spec | lab-report | research | guide | index | status | product | runbook | plan
 status: active | draft | superseded | archived
 updated: YYYY-MM-DD
 owner: HJ
 related: [相关文档的编号或文件名]
 ---
 ```
+
+**`type` 取值说明**：
+
+| type | 用于 | 例 |
+|---|---|---|
+| `index` | 索引 / 登记表 | `INDEX.md`、`04_lab/README.md` |
+| `status` | 只讲进度的文件 | `STATUS.md` |
+| `product` | 产品定义、需求、计划 | `PRODUCT.md` / `SPEC.md` / `PLAN.md` |
+| `adr` | 决策记录 | `02_decisions/Dxxx-*.md` |
+| `spec` | 技术规范 / 数据结构 | `03_specs/*.md` |
+| `lab-report` | 实验报告与原始数据 | `04_lab/**/*.md` |
+| `research` | 外部调研 | `05_research/*.md` |
+| `guide` | 操作规范 / 工具清单 | `DEV_STANDARD.md` / `TOOLING.md` |
+| `runbook` | 可执行的操作手册 | `RUNBOOK.md` |
+| `plan` | 执行计划书（区别于 product 的长期计划） | 实验执行卡片 |
+| `agent-entry` | 给 AI 协作者的入口说明 | `AGENTS.md` |
+
+> ⚠️ **不要自创 type 值。** 需要新的类型时，先在此表登记再加使用。
 
 | 字段 | 必填 | 说明 |
 |---|---|---|

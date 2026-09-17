@@ -96,7 +96,7 @@ docs/
 ```yaml
 ---
 title: 文档标题
-type: adr | spec | lab-report | research | guide | index | status
+type: adr | spec | lab-report | research | guide | index | status | product | runbook | plan | agent-entry
 status: active | draft | superseded | archived
 updated: YYYY-MM-DD
 owner: HJ
@@ -106,6 +106,8 @@ related: [其他文档的编号或文件名]
 
 > ⚠️ **Frontmatter 对 LLM 不是自动可见的** —— 你必须主动去读它。
 > 特别要检查 `status`：如果是 `superseded` 或 `archived`，**不要使用该文档的内容**。
+>
+> `type` 的完整取值与含义见 [`DOC_STANDARD.md` §四](./DOC_STANDARD.md)。
 
 ---
 

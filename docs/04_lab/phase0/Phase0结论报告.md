@@ -1,7 +1,7 @@
 ---
 title: P0-1 · 第一轮结论报告（部分结论已被修正）
 type: lab-report
-status: archived
+status: superseded
 date: 2026-09-16
 updated: 2026-09-17
 superseded_by: [三方对照结论.md]
