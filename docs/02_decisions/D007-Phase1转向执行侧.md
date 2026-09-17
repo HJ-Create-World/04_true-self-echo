@@ -5,6 +5,8 @@ status: active
 updated: 2026-09-17
 owner: HJ
 related: [三方对照结论, E2-双层素材提取, E3-分析层对照]
+# ⚠️ related 中的 E2 / E3 已于 2026-09-17 移入 _archive/phase0/ 且 status: archived
+# —— 它们是本决策的历史数据依据（22/30 与 23/30），仅作追溯，不可作为当前依据
 ---
 
 # D007 · Phase 1 转向执行侧干预

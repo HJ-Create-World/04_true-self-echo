@@ -8,6 +8,12 @@ owner: HJ
 
 # INDEX · 文档登记表
 
+> **什么时候读这份文档**：你不知道某条信息在哪份文档里时；或新增/归档文档时（必须回来登记）。
+>
+> **它不是**：文档内容本身 —— 它只登记"有哪些文档、各自管什么"。也不登记 `notes/`（那里不算文档）。
+>
+> **它能回答**：某条信息归哪份文档？某份文档现在还有效吗？我要写的新文档是不是已经存在了？
+
 > **找不到某份信息时，先查这里。不要靠猜文件名。**
 >
 > 新增文档必须在此登记，否则视为不存在。删除/归档文档必须在 `status` 列标注。
@@ -47,7 +53,7 @@ owner: HJ
 | 文件 | status | 用途 |
 |---|---|---|
 | `persona-schema.md` | draft | 人格档案数据结构定义 |
-| `评分标准.md` | draft | **三套实验评分标准的唯一定义处**。看历史分数前必读（§四属事后重构，待 HJ 复核） |
+| `评分标准.md` | active | **三套实验评分标准的唯一实体出处**。看历史分数前必读（§四是第三套的事后重构，HJ 已于 2026-09-17 复核认可其推断锚点） |
 
 > 规划中（尚未创建，不要引用）：`memory-schema.md`（记忆卡片结构）、`prompt-assembly.md`（System Prompt 拼装规则）。
 
@@ -56,21 +62,19 @@ owner: HJ
 |---|---|---|
 | `README.md` | active | **实验索引**。看进行过哪些验证 |
 | `phase0/三方对照结论.md` | active | ⭐ **第二轮总纲**（elysia 素材三方对照）—— 当前有效结论看这份 |
-| `phase0/Phase0结论报告.md` | superseded | 第一轮结论（**核心发现已被第二轮修正**，见文件头横幅） |
-| `phase0/E1-纯台词提取.md` | active | 原始数据：纯台词组 14/30 |
-| `phase0/E2-双层素材提取.md` | active | 原始数据：双层素材组 22/30 |
-| `phase0/E3-分析层对照.md` | active | 原始数据：分析层组 23/30 |
-| `phase0/A-角色台词.md` | active | **素材原文**（爱莉希雅 4 场景）。⚠️ 末尾含考点答案表，评测前须剔除 |
-| `phase0/A2-纯台词版.md` | active | **素材原文**（A 版的无括号动作对照组） |
-| `phase0/Prompt-提取.md` | active | **提取 Prompt v1/v2 原文**（产品原型） |
-| `phase0/B-闭环验证.md` | active | **扮演闭环测试流程 + 第一套六维标准 + 四轮测试话术** |
-| `phase0/测试结果-扮演.md` | active | 第一轮扮演原始数据（含自建 System Prompt 全文） |
-| `phase0/测试结果-诊断.md` | active | **Prompt 缺陷诊断与七条修正**（Phase 1 Prompt 设计输入） |
-| `phase0/测试结果-投料量对照.md` | active | **投料量实验**（L1/L2/L3 三档）—— 唯一覆盖此议题 |
-| `phase0/测试结果-纯台词对照.md` | active | 第一轮纯台词对照原始数据（材料层级理论第一手证据） |
-| `phase0/测试结果-v1.md` | active | 第一轮原始数据（v1 总结式输出） |
-| `phase0/测试结果-v2.md` | active | 第一轮原始数据（v2 考证式输出） |
-| `phase0/执行卡片.md` | superseded | 操作手册（已执行完毕，保留作 E4/E5/E6 流程模板） |
+
+### 📁 `_archive/` — 归档区
+| 文件 | status | 说明 |
+|---|---|---|
+| `phase0/README.md` | active | ⭐ **Phase 0 归档目录的登记页**。16 份文件的清单、性质分类、引用规则都在那里，本表**不再逐个登记**（单一信息源） |
+| `PHASE0_人格提取验证.md` | archived | 内容已拆分到 `04_lab/` + `STATUS.md` |
+| `模型实测说明.md` | archived | **Phase 0 的执行前计划书**（含第一套红线、第二套标准摘要、双维合并判定表）；测试已跑完。取代者：`03_specs/评分标准.md` §2.1 + §3.1 + §2.3 |
+
+> ⚠️ **`_archive/` 里的文件不都是失效的** —— 其中「归档资产」（评测素材、Prompt 原文、方法论）`status` 仍是 `active`，
+> 是**唯一出处，必须引用**。详见 [`_archive/phase0/README.md`](../_archive/phase0/README.md)
+> 与 [`DOC_STANDARD.md` §7.5](./DOC_STANDARD.md)。
+>
+> ⚠️ **`_archive/` 下没有「日常依据」** —— 过程记录（`archived` / `superseded`）只作历史数据追溯。
 
 ### 📁 `05_research/` — 外部调研
 | 文件 | status | 用途 |
@@ -91,7 +95,7 @@ owner: HJ
 | 文件 | status | 废弃原因 | 取代者 |
 |---|---|---|---|
 | `PHASE0_人格提取验证.md` | archived | 内容已拆分到 `04_lab/` + `STATUS.md` | `04_lab/README.md` |
-| `模型实测说明.md` | archived | Phase 0 执行前计划书，测试已跑完 | `03_specs/评分标准.md` §三 |
+| `模型实测说明.md` | archived | **Phase 0 的执行前计划书**（含第一套红线、第二套标准摘要、双维合并判定表）；测试已跑完 | `03_specs/评分标准.md` §2.1（第一套红线）+ §3.1（第二套）+ §2.3（合并判定） |
 
 > ⚠️ **`_archive/` 下的内容一律不可作为依据。**
 
@@ -107,9 +111,11 @@ owner: HJ
 | 为什么不做微调 | `02_decisions/D005-不做模型微调.md` |
 | 人格档案有哪些字段 | `03_specs/persona-schema.md` |
 | 历史分数（14/30 等）是怎么评的 | `03_specs/评分标准.md` |
-| 投料要多少字、什么场景 | `04_lab/phase0/测试结果-投料量对照.md` |
-| 提取 Prompt 该怎么写 | `04_lab/phase0/测试结果-诊断.md`（七条修正） |
-| 扮演要跑哪几轮、怎么打分 | `04_lab/phase0/B-闭环验证.md` |
+| 投料要多少字、什么场景 | `01_product/SPEC.md` 六（归档数据出处：`_archive/phase0/测试结果-投料量对照.md`） |
+| 提取 Prompt 该怎么写 | `03_specs/评分标准.md` §六（Prompt 七条修正）；**Prompt 原文**在 [`_archive/phase0/Prompt-提取.md`](../_archive/phase0/Prompt-提取.md)（`active`，唯一出处） |
+| 扮演评测用什么素材 | [`_archive/phase0/A-角色台词.md`](../_archive/phase0/A-角色台词.md)（推荐用同目录 `A2-纯台词版.md`）—— 两文件均 `active`，是唯一出处 |
+| 扮演闭环怎么跑、四轮问什么 | `03_specs/评分标准.md` §二（转录版）；原文在 [`_archive/phase0/B-闭环验证.md`](../_archive/phase0/B-闭环验证.md)（`active`） |
+| 扮演要跑哪几轮、怎么打分 | `03_specs/评分标准.md` §二（含四轮测试话术与扮演指令原文） |
 | 验证过什么、结论是什么 | `04_lab/README.md` |
 | GitHub 上有什么同类项目 | `05_research/开源生态盘点.md` |
 | 怎么提交代码 | `06_ops/DEV_STANDARD.md` |

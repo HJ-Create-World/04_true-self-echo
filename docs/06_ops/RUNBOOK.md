@@ -1,6 +1,6 @@
 ---
 title: RUNBOOK · 操作手册
-type: guide
+type: runbook
 status: active
 updated: 2026-09-17
 owner: HJ

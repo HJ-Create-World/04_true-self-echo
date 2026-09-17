@@ -1,4 +1,19 @@
+---
+title: 竞品实测 · elysia.skill（duhca/elysia.skill）
+type: research
+status: active
+updated: 2026-09-17
+owner: HJ
+related: [开源生态盘点, 竞品-Distilly, D007-Phase1转向执行侧]
+---
+
 # 开源同类项目实测评估：elysia.skill (v8.0)
+
+> **什么时候读这份文档**：设计约束条件、反例训练、素材来源标注时；或想知道"角色扮演为什么分析得漂亮却演不出来"时。
+>
+> **它不是**：我们的方案（那是 `../01_product/SPEC.md` / `../03_specs/`）—— 它是对一个外部项目的实测判断，含负面结论。
+>
+> **它能回答**：这个 43★ 项目哪些设计值得抄、哪些是负优化？为什么它的分析漂亮但扮演深度是塌的？它踩了哪些工程坑？
 
 > 实测时间：2026-09-16
 > 项目路径：`D:\01_HJ_Work\00_Person\03_Github\05_elysia-skill`

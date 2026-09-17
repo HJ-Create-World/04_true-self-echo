@@ -4,6 +4,7 @@ type: lab-report
 status: superseded
 date: 2026-09-16
 updated: 2026-09-17
+owner: HJ
 superseded_by: [三方对照结论.md]
 ---
 

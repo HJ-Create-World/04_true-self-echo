@@ -27,17 +27,17 @@ related: [docs/01_product/PRODUCT, docs/00_meta/STATUS]
 
 ## 从哪开始读
 
-| 你是 | 先读 |
-|---|---|
-| **AI / 第一次接手项目** | [`docs/00_meta/AGENTS.md`](docs/00_meta/AGENTS.md) ← **AI 入口** |
-| **第一次接触这个项目** | [`docs/01_product/PRODUCT.md`](docs/01_product/PRODUCT.md) ← **产品全貌，先读这个** |
-| 想知道现在到哪一步了 | [`docs/00_meta/STATUS.md`](docs/00_meta/STATUS.md) |
-| 想知道要做什么、不做什么 | [`docs/01_product/SPEC.md`](docs/01_product/SPEC.md) |
-| 想知道什么时候做什么 | [`docs/01_product/PLAN.md`](docs/01_product/PLAN.md) |
-| 想知道为什么这么定 | [`docs/02_decisions/`](docs/02_decisions/) |
-| 要动手写代码了 | [`docs/06_ops/DEV_STANDARD.md`](docs/06_ops/DEV_STANDARD.md) |
-| 想知道要装什么工具 | [`docs/06_ops/TOOLING.md`](docs/06_ops/TOOLING.md) |
-| 找不到某份文档 | [`docs/00_meta/INDEX.md`](docs/00_meta/INDEX.md) ← **文档登记表** |
+| 你是               | 先读                                                                         |
+| ---------------- | -------------------------------------------------------------------------- |
+| **AI / 第一次接手项目** | [`docs/00_meta/AGENTS.md`](docs/00_meta/AGENTS.md) ← **AI 入口**             |
+| **第一次接触这个项目**    | [`docs/01_product/PRODUCT.md`](docs/01_product/PRODUCT.md) ← **产品全貌，先读这个** |
+| 想知道现在到哪一步了       | [`docs/00_meta/STATUS.md`](docs/00_meta/STATUS.md)                         |
+| 想知道要做什么、不做什么     | [`docs/01_product/SPEC.md`](docs/01_product/SPEC.md)                       |
+| 想知道什么时候做什么       | [`docs/01_product/PLAN.md`](docs/01_product/PLAN.md)                       |
+| 想知道为什么这么定        | [`docs/02_decisions/`](docs/02_decisions/)                                 |
+| 要动手写代码了          | [`docs/06_ops/DEV_STANDARD.md`](docs/06_ops/DEV_STANDARD.md)               |
+| 想知道要装什么工具        | [`docs/06_ops/TOOLING.md`](docs/06_ops/TOOLING.md)                         |
+| 找不到某份文档          | [`docs/00_meta/INDEX.md`](docs/00_meta/INDEX.md) ← **文档登记表**               |
 
 ---
 
