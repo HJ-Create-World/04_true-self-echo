@@ -2,7 +2,7 @@
 title: 交付计划与里程碑
 type: product
 status: active
-updated: 2026-09-17
+updated: 2026-09-16
 owner: HJ
 related: [SPEC, PRODUCT, ../00_meta/STATUS, D007-Phase1转向执行侧]
 ---
@@ -175,9 +175,15 @@ related: [SPEC, PRODUCT, ../00_meta/STATUS, D007-Phase1转向执行侧]
 
 当前应该做的事，按顺序：
 
-1. **确定 UI 库选型** —— Phase 1 起步前唯一的技术待决项
-2. **设计执行侧干预方案** —— D007 定的 P0 方向，也是 Phase 1 的第一个动作
-3. **搭脚手架** —— 模型接入层（双后端可切换）优先
+1. ~~确定 UI 库选型~~ ✅ **已完成（2026-09-16）** —— 见 [`D008`](../02_decisions/D008-UI方案与视觉规范.md) 与 [`DESIGN_STANDARD.md`](../06_ops/DESIGN_STANDARD.md)
+2. ~~设计执行侧干预方案~~ ✅ **已完成（2026-09-16）** —— 见 [`execution-control.md`](../03_specs/execution-control.md)，**待实测**
+3. **做水彩风静态原型** —— 一页投料页，验证 `DESIGN_STANDARD.md` 在真实交互下的可读性（`:../05_research/前端风格与UI库选型.md` §3.3 第 3 步）
+4. **搭脚手架** —— 模型接入层（双后端可切换）优先
+5. **跑路线 1 的对照实验** —— `execution-control.md` §六：对照组 + A/B/C 三实验组，单变量递进
+6. **合规专项调研** —— **阻塞上线**，可与其他并行（`SPEC.md` §12.4）
+
+> ⚠️ **新增强制项：上线公开链接前的合规清单**（`SPEC.md` §12.4，共 6 项）。
+> 该清单由 HJ 于 2026-09-16「上线公开链接」决策触发，**未完成不得上线**。
 
 > ⚠️ **Phase 0 已完成，不要再执行它。** 历史操作手册在
 > `../_archive/phase0/执行卡片.md`（**已于 2026-09-17 归档**，不作为依据，仅作后续实验模板）。

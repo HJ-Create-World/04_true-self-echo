@@ -2,7 +2,7 @@
 title: INDEX · 文档登记表
 type: index
 status: active
-updated: 2026-09-17
+updated: 2026-09-16
 owner: HJ
 ---
 
@@ -48,14 +48,16 @@ owner: HJ
 | `D005-不做模型微调.md` | active | 彻底不做 LoRA / 训练 |
 | `D006-文档管理体系.md` | active | 分层目录 + 单一信息源 + 状态机 |
 | `D007-Phase1转向执行侧.md` | active | 从"加码素材"转向"干预生成" |
+| `D008-UI方案与视觉规范.md` | active | Tailwind CSS v4 + 水彩画风（**部分推翻** `05_research/前端风格与UI库选型.md`） |
 
 ### 📁 `03_specs/` — 技术规范（回答"怎么做"）
 | 文件 | status | 用途 |
 |---|---|---|
-| `persona-schema.md` | draft | 人格档案数据结构定义 |
-| `评分标准.md` | active | **三套实验评分标准的唯一实体出处**。看历史分数前必读（§四是第三套的事后重构，HJ 已于 2026-09-17 复核认可其推断锚点） |
+| `persona-schema.md` | draft | 人格档案数据结构定义（分层结构已决策：暂不升级） |
+| `评分标准.md` | active | **三套实验评分标准的唯一实体出处**。看历史分数前必读（§四是第三套的事后重构，HJ 已于 2026-09-17 复核认可其推断锚点；§九为 Phase 1 冻结版） |
+| `execution-control.md` | draft | **执行侧干预实现**（路线 1：三明治 + 重注入 + 成对示例 + temperature），含四轮对话验收法与对照设计 |
 
-> 规划中（尚未创建，不要引用）：`memory-schema.md`（记忆卡片结构）、`prompt-assembly.md`（System Prompt 拼装规则）。
+> 规划中（尚未创建，不要引用）：`memory-schema.md`（记忆卡片结构）、`prompt-assembly.md`（System Prompt 拼装规则 —— **注意与 `execution-control.md` §二 可能重叠，创建前先确认归属**）。
 
 ### 📁 `04_lab/` — 实验与实测
 | 文件 | status | 用途 |
@@ -84,22 +86,15 @@ owner: HJ
 | `AI陪伴市场调研.md` | active | 市场产品、付费、合规 |
 | `开源生态盘点.md` | active | 5 类开源项目横向对比 |
 | `执行侧干预_调研报告.md` | active | **Phase 1 技术路线的业界依据**。sycophancy / lost-in-the-middle / 三条干预路线对比（回答「为什么 System Prompt 规则不生效」） |
-| `前端风格与UI库选型.md` | active | 找风格的网站清单 + Vue3 组件库对比（回答「去哪找 UI 参考」「选哪个库」） |
+| `前端风格与UI库选型.md` | active | 找风格的网站清单 + Vue3 组件库对比。⚠️ §〇 第 5 条与 §四的「不推荐 Tailwind」**已于 2026-09-16 被推翻**（原因见该文修订块） |
 
 ### 📁 `06_ops/` — 操作手册
 | 文件 | status | 用途 |
 |---|---|---|
 | `DEV_STANDARD.md` | active | 开发规范（含防烂尾约束） |
+| `DESIGN_STANDARD.md` | active | **视觉规范（水彩画风）**：Token 字典、禁止项正则、动效四规则、自检清单（回答「背景用什么色」「哪些 class 不能用」） |
 | `RUNBOOK.md` | active | 常见操作：git、构建、部署 |
 | `TOOLING.md` | active | Skill / MCP 清单 |
-
-### 📁 `_archive/` — 已废弃
-| 文件 | status | 废弃原因 | 取代者 |
-|---|---|---|---|
-| `PHASE0_人格提取验证.md` | archived | 内容已拆分到 `04_lab/` + `STATUS.md` | `04_lab/README.md` |
-| `模型实测说明.md` | archived | **Phase 0 的执行前计划书**（含第一套红线、第二套标准摘要、双维合并判定表）；测试已跑完 | `03_specs/评分标准.md` §2.1（第一套红线）+ §3.1（第二套）+ §2.3（合并判定） |
-
-> ⚠️ **`_archive/` 下的内容一律不可作为依据。**
 
 ---
 
@@ -125,9 +120,15 @@ owner: HJ
 | 某个黑话是什么意思 | `00_meta/GLOSSARY.md` |
 | 写新文档要怎么起头 | `00_meta/DOC_STANDARD.md` |
 | **去哪找前端 UI 风格参考** | `05_research/前端风格与UI库选型.md` §一 |
-| **UI 库选哪个** | `05_research/前端风格与UI库选型.md` §二（⚠️ 尚未决策，需开 ADR） |
+| **UI 库 / 样式方案选哪个** | ✅ **已决策**：`02_decisions/D008-UI方案与视觉规范.md`（Tailwind CSS v4 + 水彩画风） |
+| **某个颜色/圆角/阴影该用什么值** | `06_ops/DESIGN_STANDARD.md` §一（**取值唯一信息源**） |
+| **哪些 Tailwind class 不能用** | `06_ops/DESIGN_STANDARD.md` §三（可执行正则） |
 | **为什么 System Prompt 里的规则不生效** | `05_research/执行侧干预_调研报告.md` §问题 2 |
 | **Phase 1 干预方案有哪几条路** | `05_research/执行侧干预_调研报告.md` §问题 3 |
+| **执行侧干预具体怎么实现** | `03_specs/execution-control.md`（路线 1 四步方案，含验收方法） |
+| **分享 / 导出功能做到什么程度** | `01_product/SPEC.md` §十 第 8·12 条（单体分享要做，社区不做；真实人物不提供） |
+| **上线公开链接前要做什么** | `01_product/SPEC.md` §12.4（6 项清单，**未完成不得上线**） |
+| **哪些人格场景是红线** | `01_product/SPEC.md` §十 第 11·12 条（不做逝者复刻；真实人物不可分享） |
 
 ---
 
@@ -145,6 +146,7 @@ owner: HJ
 | 实验数据与结论 | `04_lab/` 对应文件 |
 | 外部项目信息 | `05_research/` |
 | 开发流程与规范 | `06_ops/DEV_STANDARD.md` |
+| **视觉取值（色值/圆角/阴影/动效参数）** | `06_ops/DESIGN_STANDARD.md` §一 |
 | 术语定义 | `00_meta/GLOSSARY.md` |
 
 ---
