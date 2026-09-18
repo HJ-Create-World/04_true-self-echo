@@ -78,43 +78,49 @@ git push origin main
 
 ## 三、⚠️ 已知坑
 
-### 坑 1：`[origin/main] [gone]`
+### 坑 1：`[origin/main] [gone]` —— **不可修复，只能绕开**
 
-**现象**：`git push` 返回 `EXIT=0`，但 `git status` 持续显示 `[gone]`，`git for-each-ref refs/remotes` 输出为空。
+> 🔴 **修订说明（2026-09-18）**：本节原写的「建目录 + 写文件」修复方案
+> **已实测证伪，完全无效**。保留此修订记录以防重犯。正确结论如下。
 
-**根因**（2026-09-17 精确定位）：`.git\refs\remotes\` 下**缺 `origin` 子目录**，所以写入报「未能找到路径的一部分」。
+**现象**：`git push` 返回 `EXIT=0`，但 `git status` 持续显示 `[gone]`，
+`git for-each-ref refs/remotes` 输出为空。**每推送一次复现一次。**
 
-**两个陷阱**：
-1. `New-Item ... | Out-Null` **会静默吞掉建目录的报错** —— 看起来成功实际没建
-2. `git update-ref` **也写不进去**（目录不存在时不建父目录且不报错）
+**真因**：**当前沙箱环境禁止写入 `.git/refs/remotes/`。**
+不是「缺目录」，不是「顺序问题」，不是「要分两步执行」——
+是写入这个路径本身被环境拦截。
 
-**诊断**：
+**穷举验证（四条路径全部失败）**：
+
+| 路径 | 结果 |
+|---|---|
+| `git push origin main` | 远程已更新，但本地引用仍不落盘 |
+| `git fetch origin` | 报 `* [new branch] main -> origin/main`，文件依然不存在 |
+| `git update-ref` | **EXIT=0 但零输出、零写入**（静默丢弃） |
+| 直接 `[System.IO.File]::WriteAllText` | 静默失败，`File.Exists` 仍为 False |
+
+> 📌 **教训：`EXIT=0` 不等于成功。** 本环境里多处出现「静默丢弃」——
+> 命令返回成功但什么都没做。**验收必须查实际状态，不能只看退出码。**
+
+**❌ 不要这样做**（已被证伪，浪费过时间）：
 ```powershell
-git ls-remote --heads origin    # 远程哈希
-git rev-parse HEAD              # 本地哈希 —— 一致即远程正常
-git for-each-ref refs/remotes   # 空 = 引用未落盘
-```
-
-**修复**（三条命令，逐条确认）：
-```powershell
-# 1. 建目录（不加 Out-Null）
-Set-Location "<项目路径>"
-New-Item -ItemType Directory -Path ".git\refs\remotes\origin" -Force -ErrorAction Stop
-Test-Path ".git\refs\remotes\origin"   # 必须 True
-```
-```powershell
-# 2. 写引用
+# 以下全部无效，不要再试
+New-Item -ItemType Directory -Path ".git\refs\remotes\origin" -Force
 $sha = (git rev-parse HEAD).Trim()
-[System.IO.File]::WriteAllText("$PWD\.git\refs\remotes\origin\main", $sha + "`n", (New-Object System.Text.UTF8Encoding($false)))
-```
-```powershell
-# 3. 三方验证
-git for-each-ref refs/remotes      # 应输出 refs/remotes/origin/main
-git branch -vv                     # 应显示 [origin/main]
-git status -sb                     # 应显示 ## main...origin/main
+[System.IO.File]::WriteAllText("$PWD\.git\refs\remotes\origin\main", ...)
 ```
 
-> ⚠️ **`[gone]` 通常意味着远程分支被删，极易误判成推送失败而反复重推。先验证远程。**
+**✅ 正确做法：接受它，改用哈希比对验收。**
+
+```powershell
+git ls-remote --heads origin main    # 远程哈希
+git rev-parse HEAD                   # 本地哈希
+# 两者一致 = 推送成功。忽略 [gone]，它只是本地显示问题。
+```
+
+> ⚠️ `[gone]` 极易被误判成「推送失败」而导致反复重推。**只要哈希一致，就是推上去了。**
+>
+> 📌 完整排查记录见 `~/.workbuddy/skills/hj-git-windows/SKILL.md` 坑 2。
 
 ### 坑 2：凭证 helper 全部失效
 

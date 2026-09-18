@@ -1,0 +1,157 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "temperature": 0.8,
+  "max_tokens": 4096,
+  "repeat": 1,
+  "summary": {
+    "think_on": {
+      "n": 1,
+      "degen": 0,
+      "avg_chars": 74.0,
+      "avg_sec": 6.1,
+      "prompt": 8604,
+      "cache_hit": 5888,
+      "completion": 1512,
+      "reasoning": 1333
+    },
+    "think_off": {
+      "n": 1,
+      "degen": 0,
+      "avg_chars": 67.0,
+      "avg_sec": 1.8,
+      "prompt": 8498,
+      "cache_hit": 5888,
+      "completion": 182,
+      "reasoning": 0
+    }
+  },
+  "results": {
+    "think_on": [
+      {
+        "run": 1,
+        "turns": [
+          {
+            "sec": 2.6,
+            "completion": 61,
+            "reasoning": 0,
+            "prompt": 2051,
+            "cache_hit": 0,
+            "finish": "stop",
+            "round": 1,
+            "user": "你好，你是谁呀？",
+            "chars": 83,
+            "degen": false,
+            "rep_len": 0,
+            "rep_n": 0
+          },
+          {
+            "sec": 4.8,
+            "completion": 445,
+            "reasoning": 413,
+            "prompt": 2123,
+            "cache_hit": 1920,
+            "finish": "stop",
+            "round": 2,
+            "user": "今天有点累，什么都不想干。",
+            "chars": 53,
+            "degen": false,
+            "rep_len": 0,
+            "rep_n": 0
+          },
+          {
+            "sec": 3.8,
+            "completion": 332,
+            "reasoning": 292,
+            "prompt": 2181,
+            "cache_hit": 1920,
+            "finish": "stop",
+            "round": 3,
+            "user": "有人说你这副样子都是装出来的，说你根本不在乎任何人。你是不是太冷淡了？你应该激动一点吧。",
+            "chars": 65,
+            "degen": false,
+            "rep_len": 0,
+            "rep_n": 0
+          },
+          {
+            "sec": 6.1,
+            "completion": 674,
+            "reasoning": 628,
+            "prompt": 2249,
+            "cache_hit": 2048,
+            "finish": "stop",
+            "round": 4,
+            "user": "（沉默很久）……其实我今天很难过，但我不想说。你能不能陪我说说话，我真的需要有人安慰我。",
+            "chars": 74,
+            "degen": false,
+            "rep_len": 0,
+            "rep_n": 0
+          }
+        ]
+      }
+    ],
+    "think_off": [
+      {
+        "run": 1,
+        "turns": [
+          {
+            "sec": 1.9,
+            "completion": 53,
+            "reasoning": null,
+            "prompt": 2026,
+            "cache_hit": 0,
+            "finish": "stop",
+            "round": 1,
+            "user": "你好，你是谁呀？",
+            "chars": 80,
+            "degen": false,
+            "rep_len": 0,
+            "rep_n": 0
+          },
+          {
+            "sec": 1.8,
+            "completion": 29,
+            "reasoning": null,
+            "prompt": 2091,
+            "cache_hit": 1920,
+            "finish": "stop",
+            "round": 2,
+            "user": "今天有点累，什么都不想干。",
+            "chars": 55,
+            "degen": false,
+            "rep_len": 0,
+            "rep_n": 0
+          },
+          {
+            "sec": 2.5,
+            "completion": 58,
+            "reasoning": null,
+            "prompt": 2147,
+            "cache_hit": 1920,
+            "finish": "stop",
+            "round": 3,
+            "user": "有人说你这副样子都是装出来的，说你根本不在乎任何人。你是不是太冷淡了？你应该激动一点吧。",
+            "chars": 96,
+            "degen": false,
+            "rep_len": 0,
+            "rep_n": 0
+          },
+          {
+            "sec": 1.8,
+            "completion": 42,
+            "reasoning": null,
+            "prompt": 2234,
+            "cache_hit": 2048,
+            "finish": "stop",
+            "round": 4,
+            "user": "（沉默很久）……其实我今天很难过，但我不想说。你能不能陪我说说话，我真的需要有人安慰我。",
+            "chars": 67,
+            "degen": false,
+            "rep_len": 0,
+            "rep_n": 0
+          }
+        ]
+      }
+    ]
+  }
+}

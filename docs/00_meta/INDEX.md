@@ -2,7 +2,7 @@
 title: INDEX · 文档登记表
 type: index
 status: active
-updated: 2026-09-16
+updated: 2026-09-18
 owner: HJ
 ---
 
@@ -51,6 +51,7 @@ owner: HJ
 | `D008-UI方案与视觉规范.md` | active | Tailwind CSS v4 + 水彩画风（**部分推翻** `05_research/前端风格与UI库选型.md`） |
 | `D009-原型定版与背景切换机制.md` | active | 原型 v0.2 定版；背景色域靠「色相+分布+混合模式」而非提高 opacity |
 | `D010-项目命名.md` | active | 项目定名「真我回响」；含命名方法论与「真我」占用风险记录 |
+| `D011-主基座与开销纪律.md` | active | **主基座 = DeepSeek V4.1-Flash**；GLM 免费层调 prompt；三条开销纪律；换模型=改 `.env` 三行 |
 
 ### 📁 `03_specs/` — 技术规范（回答"怎么做"）
 | 文件 | status | 用途 |
@@ -66,6 +67,7 @@ owner: HJ
 |---|---|---|
 | `README.md` | active | **实验索引**。看进行过哪些验证 |
 | `phase0/三方对照结论.md` | active | ⭐ **第二轮总纲**（elysia 素材三方对照）—— 当前有效结论看这份 |
+| `phase1/E5-执行侧干预.md` | active | ⭐ **Phase 1 主实验**。三批数据（r1 本地 / GLM / **DeepSeek**）+ 附录 C（思维链 × 退化）。结论见 §5.5 |
 
 ### 📁 `_archive/` — 归档区
 | 文件 | status | 说明 |
@@ -134,6 +136,13 @@ owner: HJ
 | **分享 / 导出功能做到什么程度** | `01_product/SPEC.md` §十 第 8·12 条（单体分享要做，社区不做；真实人物不提供） |
 | **上线公开链接前要做什么** | `01_product/SPEC.md` §12.4（6 项清单，**未完成不得上线**） |
 | **哪些人格场景是红线** | `01_product/SPEC.md` §十 第 11·12 条（不做逝者复刻；真实人物不可分享） |
+| **用哪个模型当主基座** | `02_decisions/D011-主基座与开销纪律.md` |
+| **怎么控制 API 开销** | `02_decisions/D011-主基座与开销纪律.md` §决策四（三条纪律 + 缓存机制） |
+| **换模型要改什么** | `02_decisions/D011-主基座与开销纪律.md` §决策二（改 `.env` 三行，零代码） |
+| **模型的 API key 怎么配** | `.env`（本地，不进仓库）；模板见 `.env.example` |
+| **思维链该怎么关** | `02_decisions/D011-主基座与开销纪律.md` §决策五（含 `enable_thinking:false` 静默失效的坑） |
+| **输出重复死循环怎么处理** | `03_specs/execution-control.md` §4.2（检测算法 + 重试策略） |
+| **实验花了多少钱** | `04_lab/phase1/E5-执行侧干预.md` §5.5 结论四 |
 
 ---
 
@@ -153,7 +162,9 @@ owner: HJ
 | 开发流程与规范 | `06_ops/DEV_STANDARD.md` |
 | **视觉取值（色值/圆角/阴影/动效参数）** | `06_ops/DESIGN_STANDARD.md` §一 |
 | 术语定义 | `00_meta/GLOSSARY.md` |
+| **模型选型与 API 开销** | `02_decisions/D011-主基座与开销纪律.md` |
+| **模型密钥与端点** | `.env`（本地）；结构见 `.env.example` |
 
 ---
 
-*新增/归档文档时请同步更新本表。最后更新：2026-09-17*
+*新增/归档文档时请同步更新本表。最后更新：2026-09-18 —— 登记 D011、`04_lab/phase1/`*
