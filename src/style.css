@@ -41,7 +41,7 @@
   --stain-4: #c38d94;
   --p4: 22% 88%;
   --r4: 38%;
-  --field-opacity: 0.12;
+  --field-opacity: 0.55;
   --texture-opacity: 0.035;
 }
 
@@ -58,7 +58,7 @@
   --stain-4: #d4a373;
   --p4: 26% 86%;
   --r4: 40%;
-  --field-opacity: 0.12;
+  --field-opacity: 0.55;
   --texture-opacity: 0.035;
 }
 
@@ -75,7 +75,7 @@
   --stain-4: #e8a87c;
   --p4: 24% 84%;
   --r4: 38%;
-  --field-opacity: 0.12;
+  --field-opacity: 0.55;
   --texture-opacity: 0.035;
 }
 
@@ -92,7 +92,7 @@
   --stain-4: #85cdca;
   --p4: 22% 88%;
   --r4: 36%;
-  --field-opacity: 0.12;
+  --field-opacity: 0.55;
   --texture-opacity: 0.035;
 }
 
@@ -104,11 +104,21 @@ body {
   height: 100%;
 }
 
+/* 3.0 纸张底色必须画在 html 上，不能画在 body 上。
+   ⚠️ 反面教材（2026-09-18 修）：底色写在 body 上时，因为 html 无背景，
+   浏览器会触发「背景传播」把 body 的 background 提升为视口 canvas 背景，
+   而这一层会盖住 body::before / body::after —— 柔光色域与纸纹**完全不渲染**，
+   表现为「切换主题页面颜色毫无变化」。
+   规则：html 拿底色，body 保持透明，伪元素才画得出来。 */
+html {
+  background-color: var(--color-paper);
+}
+
 body {
   position: relative;
   margin: 0;
   min-height: 100vh;
-  background-color: var(--color-paper);
+  background-color: transparent; /* 见上方注释，勿改回实色 */
   color: var(--color-ink);
   font-family: var(--font-serif);
   font-weight: 300;
@@ -117,7 +127,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 3.1 柔光色域：颜料在水里漫开的一层，恒定不参与交互动效 */
+/* 3.1 柔光色域：颜料在水里漫开的一层，恒定不参与交互动效
+   ⚠️ mix-blend-mode 必须用 multiply，不能用 soft-light（2026-09-18 实测修正）。
+   soft-light 的公式里含 sqrt(base)：底色接近白（#faf8f5，base≈0.98）时
+   sqrt(base) ≈ base，色差被压缩到 0–3 个色阶。实测把 opacity 从 0.12 一路加到
+   0.70，色差仍只有 0–3，肉眼与像素采样都无法分辨 —— 这就是"切主题没反应"的根因。
+   multiply 走 base × blend，底色越白越接近原色，但只要带颜色就必然压暗，
+   才是"颜料渗进纸里"的正确物理模型。改回 soft-light 会让整个色域层重新失效。 */
 body::before {
   content: '';
   position: fixed;
@@ -125,7 +141,7 @@ body::before {
   z-index: 0;
   pointer-events: none;
   opacity: var(--field-opacity);
-  mix-blend-mode: soft-light;
+  mix-blend-mode: multiply;
   background-image:
     radial-gradient(var(--r1) var(--r1) at var(--p1), var(--stain-1), transparent 70%),
     radial-gradient(var(--r2) var(--r2) at var(--p2), var(--stain-2), transparent 70%),

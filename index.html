@@ -11,6 +11,18 @@
     />
   </head>
   <body data-theme="garden">
+    <script>
+      // 首屏前应用已保存的主题，避免闪一下默认色域。
+      // 必须内联 —— 放到模块里执行太晚（模块是 defer 的）。
+      try {
+        var t = localStorage.getItem('tse.theme')
+        if (t && ['dawn', 'tide', 'dusk', 'garden'].indexOf(t) >= 0) {
+          document.body.dataset.theme = t
+        }
+      } catch (e) {
+        /* 隐私模式忽略 */
+      }
+    </script>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
