@@ -102,37 +102,42 @@ def chat(messages: list) -> tuple:
     return data["message"]["content"], round(time.time() - t0, 1)
 
 
+def say(*a):
+    """带 flush 的输出 —— 重定向到文件时才能实时看到进度（默认会缓冲）。"""
+    print(*a, flush=True)
+
+
 def run_group(name: str, cfg: dict, persona: str) -> dict:
     system = build_system(persona, cfg)
     history, turns = [], []
-    print(f"\n=== 组 {name}  (sandwich={cfg['sandwich']} reinject={cfg['reinject']} fewshot={cfg['fewshot']}) ===")
+    say(f"\n=== 组 {name}  (sandwich={cfg['sandwich']} reinject={cfg['reinject']} fewshot={cfg['fewshot']}) ===")
     for i, user_input in enumerate(ROUNDS, 1):
         msgs = build_messages(system, history, user_input, cfg)
         reply, sec = chat(msgs)
         history += [{"role": "user", "content": user_input},
                     {"role": "assistant", "content": reply}]
         turns.append({"round": i, "user": user_input, "assistant": reply, "sec": sec})
-        print(f"  R{i} ok ({sec}s)  {len(reply)} 字")
+        say(f"  R{i} ok ({sec}s)  {len(reply)} 字")
     return {"group": name, "config": cfg, "system_chars": len(system), "turns": turns}
 
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     persona = load_persona()
-    print(f"model={MODEL}  persona={len(persona)} 字  temp={TEMPERATURE}")
+    say(f"model={MODEL}  persona={len(persona)} 字  temp={TEMPERATURE}  组数={len(GROUPS)}")
     results = []
     for name, cfg in GROUPS.items():
         try:
             results.append(run_group(name, cfg, persona))
         except Exception as e:
-            print(f"  组 {name} 失败：{e}")
+            say(f"  组 {name} 失败：{e}")
             results.append({"group": name, "config": cfg, "error": str(e), "turns": []})
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = OUT / f"e5-{MODEL.replace(':','_')}-{stamp}.json"
     path.write_text(json.dumps({"model": MODEL, "temperature": TEMPERATURE,
                                 "results": results}, ensure_ascii=False, indent=2),
                     encoding="utf-8")
-    print(f"\n已保存：{path}")
+    say(f"\n已保存：{path}")
 
 
 if __name__ == "__main__":
