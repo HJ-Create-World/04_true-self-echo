@@ -36,7 +36,7 @@ owner: HJ
 |---|---|---|
 | `PRODUCT.md` | active | 产品全貌速览（原 PROJECT.md）。**接手项目先读它** |
 | `SPEC.md` | active | **需求唯一信息源**。产品定位、范围、功能清单 |
-| `PLAN.md` | active | 交付计划与里程碑、防烂尾检查点 |
+| `PLAN.md` | active | 交付计划与里程碑、防烂尾检查点。**Phase 范围界定的唯一出处**（含 Phase 2 目标/边界/验收标准） |
 
 ### 📁 `02_decisions/` — 决策记录（回答"为什么这么做"）
 | 文件 | status | 决策 |
@@ -147,6 +147,9 @@ owner: HJ
 | **思维链该怎么关** | `02_decisions/D011-主基座与开销纪律.md` §决策五（含 `enable_thinking:false` 静默失效的坑） |
 | **输出重复死循环怎么处理** | `03_specs/execution-control.md` §4.2（检测算法 + 重试策略） |
 | **实验花了多少钱** | `04_lab/phase1/E5-执行侧干预.md` §5.5 结论四 |
+| **Phase 2 要做什么、范围是什么** | `01_product/PLAN.md` §一/§二（目标、功能、验收标准）+ `01_product/SPEC.md` §六（投料模块设计） |
+| **Phase 2 开工前还要确认什么** | `00_meta/STATUS.md` §四「Phase 2 开工前必须确认的 5 项」 |
+| **人格档案的 TypeScript 结构还没实现** | `03_specs/persona-schema.md` §四（`status: draft`，是 Phase 2 的 0 号任务） |
 
 ---
 
@@ -171,4 +174,4 @@ owner: HJ
 
 ---
 
-*新增/归档文档时请同步更新本表。最后更新：2026-09-18 —— 登记 D011、`04_lab/phase1/`*
+*新增/归档文档时请同步更新本表。最后更新：2026-09-18 —— 登记 D011、`04_lab/phase1/`、`合规专项调研.md`、Phase 2 范围检索入口*
