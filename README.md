@@ -51,6 +51,53 @@ Vue 3 · TypeScript · Vite · Pinia · IndexedDB · Node.js（薄后端）
 
 ---
 
+## 怎么跑起来
+
+```bash
+npm install
+
+# 终端 1：薄后端（持有 API Key，对外只有 3 个接口）
+npm run server          # → http://127.0.0.1:8787
+
+# 终端 2：前端（/api/* 自动代理到后端）
+npm run dev             # → http://localhost:5173
+
+npm run build           # vue-tsc -b && vite build
+```
+
+首次运行前把 `.env.example` 复制成 `.env` 并填好密钥。**换模型只改 `.env` 三行，零代码改动**：
+
+```ini
+DEFAULT_PROVIDER=deepseek          # 切默认后端
+DEEPSEEK_MODEL=deepseek-flash      # 改模型
+```
+
+| 后端 | 用途 | 是否需要 Key |
+|---|---|---|
+| `glm` | 调 prompt 阶段的免费验证层 | 需要 |
+| `deepseek` | 主基座 | 需要 |
+| `ollama` | 隐私兜底层（本地跑） | **不需要** |
+
+---
+
+## 目录结构
+
+```
+src/
+  api/         模型接入层（三后端配置驱动）· 密钥不在这里，在后端
+  core/        执行侧干预：消息组装器 + 退化检测
+  persona/     人格档案（Phase 1 硬编码）
+  storage/     IndexedDB 持久化
+  stores/      Pinia 对话状态
+  components/  水彩风 UI
+server/        薄后端（单文件 ≤200 行，只有三个接口）
+docs/          文档体系（唯一信息源）
+exp/           Phase 0 实验脚本（e5_*）
+prototype/     v0.2 视觉基线原型
+```
+
+---
+
 ## 一句话原则
 
 > 所有规矩服务于同一件事：**提升审查能力，而不是提升生成速度。**

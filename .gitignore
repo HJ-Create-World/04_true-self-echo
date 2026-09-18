@@ -36,6 +36,9 @@ Thumbs.db
 # Vite
 .vite/
 
+# Tailwind v4 构建缓存
+.tailwindcss/
+
 # 运行期数据（本地对话记录、人格存档等，可能含隐私）
 data/
 *.db

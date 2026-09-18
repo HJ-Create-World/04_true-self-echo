@@ -1,0 +1,195 @@
+@import 'tailwindcss';
+
+/* ============================================================
+   1. Token 层 —— 唯一信息源：docs/06_ops/DESIGN_STANDARD.md §1.1
+   ============================================================ */
+@theme {
+  --color-paper: #faf8f5;
+  --color-ink: #3a3a3a;
+
+  --color-echo-blue: #4a6fa5;
+  --color-echo-peach: #e8a87c;
+  --color-echo-teal: #85cdca;
+  --color-echo-rose: #c38d94;
+  --color-echo-sand: #d4a373;
+
+  --font-serif:
+    Georgia, 'Songti SC', 'SimSun', 'Noto Serif SC', 'Source Han Serif SC', serif;
+
+  --shadow-paper: 0 4px 20px rgba(74, 111, 165, 0.12);
+  --shadow-bloom: 0 10px 40px rgba(74, 111, 165, 0.35);
+
+  --radius-card: 1rem;
+  --radius-card-lg: 1.5rem;
+}
+
+/* ============================================================
+   2. 柔光色域层 —— 四套主题
+   §1.1.1：加强存在感不改 opacity，改「色相 + 分布 + 混合模式」
+   ============================================================ */
+:root,
+[data-theme='garden'] {
+  --stain-1: #85cdca;
+  --p1: 20% 18%;
+  --r1: 44%;
+  --stain-2: #4a6fa5;
+  --p2: 78% 16%;
+  --r2: 46%;
+  --stain-3: #e8a87c;
+  --p3: 72% 86%;
+  --r3: 42%;
+  --stain-4: #c38d94;
+  --p4: 22% 88%;
+  --r4: 38%;
+  --field-opacity: 0.12;
+  --texture-opacity: 0.035;
+}
+
+[data-theme='dawn'] {
+  --stain-1: #e8a87c;
+  --p1: 16% 20%;
+  --r1: 48%;
+  --stain-2: #c38d94;
+  --p2: 84% 14%;
+  --r2: 44%;
+  --stain-3: #4a6fa5;
+  --p3: 70% 82%;
+  --r3: 42%;
+  --stain-4: #d4a373;
+  --p4: 26% 86%;
+  --r4: 40%;
+  --field-opacity: 0.12;
+  --texture-opacity: 0.035;
+}
+
+[data-theme='tide'] {
+  --stain-1: #4a6fa5;
+  --p1: 22% 24%;
+  --r1: 46%;
+  --stain-2: #85cdca;
+  --p2: 76% 18%;
+  --r2: 44%;
+  --stain-3: #c38d94;
+  --p3: 66% 86%;
+  --r3: 40%;
+  --stain-4: #e8a87c;
+  --p4: 24% 84%;
+  --r4: 38%;
+  --field-opacity: 0.12;
+  --texture-opacity: 0.035;
+}
+
+[data-theme='dusk'] {
+  --stain-1: #c38d94;
+  --p1: 18% 16%;
+  --r1: 46%;
+  --stain-2: #4a6fa5;
+  --p2: 82% 20%;
+  --r2: 48%;
+  --stain-3: #d4a373;
+  --p3: 68% 84%;
+  --r3: 42%;
+  --stain-4: #85cdca;
+  --p4: 22% 88%;
+  --r4: 36%;
+  --field-opacity: 0.12;
+  --texture-opacity: 0.035;
+}
+
+/* ============================================================
+   3. 基底
+   ============================================================ */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  position: relative;
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-weight: 300;
+  letter-spacing: 0.025em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 3.1 柔光色域：颜料在水里漫开的一层，恒定不参与交互动效 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--field-opacity);
+  mix-blend-mode: soft-light;
+  background-image:
+    radial-gradient(var(--r1) var(--r1) at var(--p1), var(--stain-1), transparent 70%),
+    radial-gradient(var(--r2) var(--r2) at var(--p2), var(--stain-2), transparent 70%),
+    radial-gradient(var(--r3) var(--r3) at var(--p3), var(--stain-3), transparent 70%),
+    radial-gradient(var(--r4) var(--r4) at var(--p4), var(--stain-4), transparent 70%);
+  transition: opacity 900ms ease-in-out;
+}
+
+/* 3.2 纸纹：干纸的细微颗粒，只做质感不做装饰 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--texture-opacity);
+  background-image:
+    radial-gradient(circle at 20% 30%, #fff 0.5px, transparent 1px),
+    radial-gradient(circle at 70% 60%, #fff 0.5px, transparent 1px),
+    radial-gradient(circle at 45% 85%, #fff 0.5px, transparent 1px),
+    radial-gradient(circle at 88% 22%, #fff 0.5px, transparent 1px),
+    radial-gradient(circle at 12% 74%, #fff 0.5px, transparent 1px);
+  background-size:
+    180px 180px,
+    240px 240px,
+    210px 210px,
+    300px 300px,
+    150px 150px;
+}
+
+/* 所有内容浮在色域与纸纹之上 */
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   4. 动效全局降级（无障碍）
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   5. 滚动条：细、低对比、水彩灰
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(74, 111, 165, 0.18);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(74, 111, 165, 0.3);
+}
