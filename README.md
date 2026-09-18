@@ -1,13 +1,15 @@
 ---
-title: persona-forge · 人格工坊
+title: 真我回响 · true-self-echo
 type: product
 status: active
-updated: 2026-09-17
+updated: 2026-09-18
 owner: HJ
 related: [docs/01_product/PRODUCT, docs/00_meta/STATUS]
 ---
 
-# persona-forge · 人格工坊
+# 真我回响
+
+`true-self-echo` ｜ 曾用名 `persona-forge`（人格工坊）· 2026-09-18 更名
 
 > 一个既好用、又能让你看见它内心在发生什么的 AI 伙伴。
 

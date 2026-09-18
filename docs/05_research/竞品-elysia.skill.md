@@ -19,7 +19,7 @@ related: [开源生态盘点, 竞品-Distilly, D007-Phase1转向执行侧]
 > 项目路径：`D:\01_HJ_Work\00_Person\03_Github\05_elysia-skill`
 > 来源：`https://github.com/duhca/elysia.skill`（43★ / 1 fork / Python / 无 License）
 > 实测方式：克隆后跑脚本（`nav.py` / `verify_stats.py`）+ 按 SKILL.md 启动流程完成四轮扮演 + 2 个对照探针
-> **性质：竞品对标。目的是判断 persona-forge 的哪些设计是多余的、哪些还没做到。**
+> **性质：竞品对标。目的是判断 真我回响 的哪些设计是多余的、哪些还没做到。**
 
 ---
 
@@ -276,7 +276,7 @@ related: [开源生态盘点, 竞品-Distilly, D007-Phase1转向执行侧]
 
 ---
 
-## 八、给 persona-forge 的具体行动项
+## 八、给 真我回响 的具体行动项
 
 | # | 动作 | 依据 | 优先级 |
 |---|---|---|---|

@@ -50,6 +50,7 @@ owner: HJ
 | `D007-Phase1转向执行侧.md` | active | 从"加码素材"转向"干预生成" |
 | `D008-UI方案与视觉规范.md` | active | Tailwind CSS v4 + 水彩画风（**部分推翻** `05_research/前端风格与UI库选型.md`） |
 | `D009-原型定版与背景切换机制.md` | active | 原型 v0.2 定版；背景色域靠「色相+分布+混合模式」而非提高 opacity |
+| `D010-项目命名.md` | active | 项目定名「真我回响」；含命名方法论与「真我」占用风险记录 |
 
 ### 📁 `03_specs/` — 技术规范（回答"怎么做"）
 | 文件 | status | 用途 |
@@ -125,6 +126,7 @@ owner: HJ
 | **某个颜色/圆角/阴影该用什么值** | `06_ops/DESIGN_STANDARD.md` §一（**取值唯一信息源**） |
 | **背景色域为什么不透明度这么低却很显眼** | `02_decisions/D009-原型定版与背景切换机制.md` §三 |
 | **视觉基线长什么样（可运行样本）** | `prototype/index.html`（v0.2，2026-09-17 定版） |
+| **项目为什么叫「真我回响」** | `02_decisions/D010-项目命名.md` |
 | **哪些 Tailwind class 不能用** | `06_ops/DESIGN_STANDARD.md` §三（可执行正则） |
 | **为什么 System Prompt 里的规则不生效** | `05_research/执行侧干预_调研报告.md` §问题 2 |
 | **Phase 1 干预方案有哪几条路** | `05_research/执行侧干预_调研报告.md` §问题 3 |

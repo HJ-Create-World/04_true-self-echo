@@ -159,7 +159,7 @@ $tok = $tok.Substring(0, $tok.IndexOf("@"))
 
 | 项 | 值 |
 |---|---|
-| 远程 | `https://github.com/HJ-Create-World/04_persona-forge.git` |
+| 远程 | `https://github.com/HJ-Create-World/04_true-self-echo.git` |
 | 可见性 | 私有 |
 | 分支 | `main` |
 | 本地路径 | `D:\01_HJ_Work\00_Person\04_Project\04_persona-forge` |
