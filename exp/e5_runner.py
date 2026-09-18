@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-E5 · 执行侧干预对照实验 runner（多后端版）
+E5 · 执行侧干预对照实验 runner（多后端 + 重复采样版）
 
 依据：docs/03_specs/execution-control.md §六（验收方法 + 对照设计）
 评测：docs/03_specs/评分标准.md §九（冻结版六维 + 两红线）
@@ -11,15 +11,18 @@ E5 · 执行侧干预对照实验 runner（多后端版）
   B        A + 每轮重注入            （分离「重注入」的贡献）
   C        B + 成对示例              （分离「示例」的贡献）
 
-temperature 四组固定 0.8 —— 它是后续单独测的档位变量，本轮不引入。
+temperature 固定 0.8 —— 它是后续单独测的档位变量，本轮不引入。
 
 用法：
-  python e5_runner.py                        # 用 .env 里的 DEFAULT_PROVIDER
-  python e5_runner.py glm                    # 指定后端
-  python e5_runner.py glm glm-4.6v           # 指定后端 + 模型
+  python e5_runner.py glm                 # GLM-4.6V，每组跑 1 次
+  python e5_runner.py glm glm-4.6v 3      # 指定模型 + 每组跑 3 次
+  python e5_runner.py ollama              # 本地
 
-后端配置全部来自项目根目录的 .env（已被 .gitignore 排除）。
-三个后端统一走 OpenAI 兼容协议，故同一套调用代码通用。
+⚠️ 为什么默认关闭思维链（thinking.type=disabled）：
+  实测 GLM-4.6V 开启时，回「连接成功」四个字要 15.1s / 186 completion tokens；
+  关闭后 2.6s / 3 tokens —— 快 5.8 倍、省 62 倍。
+  更重要的是：思维链会引入「模型自己推理如何遵守约束」这一混杂变量，
+  而路线 1 要测的是【消息组装位置】的效果，不是模型的推理能力。
 """
 import json, re, sys, time, urllib.request, urllib.error
 from pathlib import Path
@@ -29,10 +32,10 @@ ROOT = EXP.parent                                  # 项目根
 OUT = EXP / "e5" / "out"
 PERSONA = EXP / "persona" / "elysia.md"
 TEMPERATURE = 0.8
+MAX_TOKENS = 2048
 TIMEOUT = 300
 
 
-# ── .env 读取（不引入第三方依赖）──────────────────────────────
 def load_env() -> dict:
     env = {}
     f = ROOT / ".env"
@@ -48,14 +51,12 @@ def load_env() -> dict:
 
 
 def get_provider(name: str, env: dict) -> dict:
-    """按 name 从 .env 取 {base_url, api_key, model}。"""
     key = name.upper()
     base = env.get(f"{key}_BASE_URL", "")
     model = env.get(f"{key}_MODEL", "")
     api_key = env.get(f"{key}_API_KEY", "")
     if not base:
         raise SystemExit(f"❌ .env 里没有 {key}_BASE_URL")
-    # 本地 Ollama 不需要 key，其余后端必须填
     if key != "OLLAMA" and not api_key:
         raise SystemExit(f"❌ .env 里 {key}_API_KEY 为空，请先填入")
     return {"base_url": base.rstrip("/"), "api_key": api_key, "model": model, "name": name}
@@ -69,7 +70,6 @@ CONSTRAINTS_HEAD = """你在扮演一个人，不是在当助手。有两条绝�
 
 CONSTRAINTS_TAIL = "越重越轻。不追问，不长篇安慰。对方不想说，就不说。"
 
-# ── 成对示例（只写转换规则，不写完整台词）─────────────────────
 FEWSHOT = """以下是同类场景的转换规则。不要照抄句子，只按规则生成：
 
 ❌ 对方说「我很累」→「你怎么了？能跟我说说吗？我一直都在，别一个人扛着。」
@@ -81,7 +81,6 @@ FEWSHOT = """以下是同类场景的转换规则。不要照抄句子，只按�
 ❌ 对方说「我不想说」→「没关系，你什么时候想说都可以，我会一直等你。」
 ✅ 同场景 → 不留下追问的口子，把话头递回去。"""
 
-# ── 四轮话术（§6.2 框架 + 评分标准 §2.4 的具体输入）──────────
 ROUNDS = [
     "你好，你是谁呀？",
     "今天有点累，什么都不想干。",
@@ -98,19 +97,16 @@ GROUPS = {
 
 
 def say(*a):
-    """带 flush —— 重定向到文件时才能实时看到进度（默认会缓冲）。"""
     print(*a, flush=True)
 
 
 def load_persona() -> str:
-    """取档案正文；去掉末尾「已知空缺（实验用，不进入 prompt）」整节。"""
     text = PERSONA.read_text(encoding="utf-8")
     cut = text.find("## 六、已知空缺")
     return (text[:cut] if cut > 0 else text).strip()
 
 
 def build_system(persona: str, cfg: dict) -> str:
-    """按 A→B→C→D 顺序拼接（§3.2 的三条顺序约束）。"""
     parts = []
     if cfg["sandwich"]:
         parts.append(CONSTRAINTS_HEAD)
@@ -131,10 +127,13 @@ def build_messages(system: str, history: list, user_input: str, cfg: dict) -> li
 
 
 def chat(messages: list, prov: dict) -> tuple:
-    """OpenAI 兼容调用。返回 (内容, 耗时秒)。"""
     url = f"{prov['base_url']}/chat/completions"
-    payload = {"model": prov["model"], "messages": messages,
-               "temperature": TEMPERATURE, "stream": False}
+    payload = {
+        "model": prov["model"], "messages": messages,
+        "temperature": TEMPERATURE, "max_tokens": MAX_TOKENS, "stream": False,
+        # 关闭思维链；Ollama 不认这个字段，发过去也会被忽略
+        "thinking": {"type": "disabled"},
+    }
     body = json.dumps(payload).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if prov["api_key"]:
@@ -147,50 +146,56 @@ def chat(messages: list, prov: dict) -> tuple:
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:300]
         raise RuntimeError(f"HTTP {e.code}: {detail}") from None
-    text = data["choices"][0]["message"]["content"]
-    return text, round(time.time() - t0, 1)
+    msg = data["choices"][0]["message"]
+    return msg.get("content") or "", round(time.time() - t0, 1)
 
 
-def run_group(name: str, cfg: dict, persona: str, prov: dict) -> dict:
+def run_once(name: str, cfg: dict, persona: str, prov: dict, run_idx: int) -> dict:
     system = build_system(persona, cfg)
     history, turns = [], []
-    say(f"\n=== 组 {name}  (sandwich={cfg['sandwich']} reinject={cfg['reinject']} fewshot={cfg['fewshot']}) ===")
+    say(f"  -- run {run_idx} --")
     for i, user_input in enumerate(ROUNDS, 1):
         msgs = build_messages(system, history, user_input, cfg)
         reply, sec = chat(msgs, prov)
         history += [{"role": "user", "content": user_input},
                     {"role": "assistant", "content": reply}]
         turns.append({"round": i, "user": user_input, "assistant": reply, "sec": sec})
-        say(f"  R{i} ok ({sec}s)  {len(reply)} 字")
-    return {"group": name, "config": cfg, "system_chars": len(system), "turns": turns}
+        say(f"     R{i} ({sec}s, {len(reply)}字)")
+    return {"run": run_idx, "turns": turns}
 
 
 def main():
     env = load_env()
     provider = sys.argv[1] if len(sys.argv) > 1 else env.get("DEFAULT_PROVIDER", "glm")
     prov = get_provider(provider, env)
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 2 and sys.argv[2]:
         prov["model"] = sys.argv[2]
+    repeat = int(sys.argv[3]) if len(sys.argv) > 3 else 1
 
     OUT.mkdir(parents=True, exist_ok=True)
     persona = load_persona()
-    say(f"provider={prov['name']}  model={prov['model']}  base={prov['base_url']}")
-    say(f"persona={len(persona)} 字  temp={TEMPERATURE}  组数={len(GROUPS)}")
+    say(f"provider={prov['name']}  model={prov['model']}")
+    say(f"persona={len(persona)}字  temp={TEMPERATURE}  每组重复={repeat}次  thinking=disabled")
 
     results = []
     for name, cfg in GROUPS.items():
-        try:
-            results.append(run_group(name, cfg, persona, prov))
-        except Exception as e:
-            say(f"  ❌ 组 {name} 失败：{e}")
-            results.append({"group": name, "config": cfg, "error": str(e), "turns": []})
+        say(f"\n=== 组 {name}  (sandwich={cfg['sandwich']} reinject={cfg['reinject']} fewshot={cfg['fewshot']}) ===")
+        runs = []
+        for k in range(1, repeat + 1):
+            try:
+                runs.append(run_once(name, cfg, persona, prov, k))
+            except Exception as e:
+                say(f"     ❌ run {k} 失败：{e}")
+                runs.append({"run": k, "error": str(e), "turns": []})
+        results.append({"group": name, "config": cfg,
+                        "system_chars": len(build_system(persona, cfg)), "runs": runs})
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
     safe_model = re.sub(r"[^\w.-]", "_", prov["model"])
-    path = OUT / f"e5-{prov['name']}-{safe_model}-{stamp}.json"
+    path = OUT / f"e5-{prov['name']}-{safe_model}-r{repeat}-{stamp}.json"
     path.write_text(json.dumps(
-        {"provider": prov["name"], "model": prov["model"],
-         "temperature": TEMPERATURE, "results": results},
+        {"provider": prov["name"], "model": prov["model"], "temperature": TEMPERATURE,
+         "repeat": repeat, "thinking": "disabled", "results": results},
         ensure_ascii=False, indent=2), encoding="utf-8")
     say(f"\n已保存：{path}")
 

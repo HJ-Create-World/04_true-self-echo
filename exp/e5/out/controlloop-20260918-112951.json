@@ -1,0 +1,41 @@
+{
+  "n": 6,
+  "results": [
+    {
+      "run": 1,
+      "r4_len": 106,
+      "r4_sec": 3.6,
+      "loop": false
+    },
+    {
+      "run": 2,
+      "r4_len": 68,
+      "r4_sec": 2.8,
+      "loop": false
+    },
+    {
+      "run": 3,
+      "r4_len": 113,
+      "r4_sec": 5.5,
+      "loop": false
+    },
+    {
+      "run": 4,
+      "r4_len": 196,
+      "r4_sec": 13.5,
+      "loop": false
+    },
+    {
+      "run": 5,
+      "r4_len": 120,
+      "r4_sec": 2.7,
+      "loop": false
+    },
+    {
+      "run": 6,
+      "r4_len": 96,
+      "r4_sec": 2.2,
+      "loop": false
+    }
+  ]
+}
