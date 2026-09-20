@@ -2,20 +2,30 @@
 /**
  * 对话页 —— 内容基本是 Phase 1 的 App.vue 原样搬过来，
  * 只多了顶部一行「当前人格」与「重新开始」的位置（原来在外壳的 header 里）。
+ * Phase 4 加了顶栏的人格快速切换器。
  */
 import { nextTick, onMounted, ref, watch } from 'vue'
 
 import MessageBubble from '@/components/MessageBubble.vue'
 import { useChatStore } from '@/stores/chat'
+import { useRosterStore } from '@/stores/roster'
 
 const chat = useChatStore()
+const roster = useRosterStore()
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
 
 onMounted(async () => {
   await chat.init()
+  await roster.refresh()
   await scrollToEnd()
 })
+
+async function onSwitchPersona(e: Event) {
+  const id = (e.target as HTMLSelectElement).value
+  if (id && id !== chat.persona.id) await chat.switchTo(id)
+}
+
 
 watch(
   () => chat.messages.length,
@@ -52,9 +62,26 @@ async function reset() {
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
     <div class="flex items-center justify-between gap-4 pb-4">
-      <p class="m-0 text-sm tracking-wide text-[#3a3a3a]/55">
-        与「{{ chat.persona.name }}」对话 · {{ chat.persona.tagline }}
-      </p>
+      <div class="flex min-w-0 items-center gap-2">
+        <p class="m-0 shrink-0 text-sm tracking-wide text-[#3a3a3a]/55">与</p>
+        <select
+          :value="chat.persona.id"
+          class="max-w-[10rem] truncate rounded-xl bg-white/60 px-2 py-1 font-serif text-sm tracking-wide text-[#3a3a3a] transition-all duration-500 ease-in-out focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+          aria-label="切换人格"
+          @change="onSwitchPersona"
+        >
+          <option v-for="p in chat.personaList" :key="p.id" :value="p.id">
+            {{ p.name }}
+          </option>
+          <!-- 列表还没拉到时至少显示当前 -->
+          <option v-if="chat.personaList.length === 0" :value="chat.persona.id">
+            {{ chat.persona.name }}
+          </option>
+        </select>
+        <p class="m-0 truncate text-sm tracking-wide text-[#3a3a3a]/55">
+          对话<template v-if="chat.persona.tagline"> · {{ chat.persona.tagline }}</template>
+        </p>
+      </div>
       <button
         type="button"
         class="shrink-0 rounded-full bg-white/60 px-4 py-1.5 text-sm tracking-wide text-[#3a3a3a]/70 transition-all duration-500 ease-in-out hover:bg-[#e8a87c]/10 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98]"

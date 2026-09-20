@@ -25,7 +25,14 @@ import {
   retitleFromFirst,
   type MessageRow,
 } from '@/storage/db'
-import { latestPersona, saveEvolving, seedIfEmpty } from '@/storage/personaRepo'
+import {
+  getPersona,
+  latestPersona,
+  listPersonaSummaries,
+  saveEvolving,
+  seedIfEmpty,
+  type PersonaSummary,
+} from '@/storage/personaRepo'
 import { appendSnapshot } from '@/storage/snapshotRepo'
 import { frozenHash } from '@/persona/evolving'
 
@@ -52,26 +59,53 @@ export const useChatStore = defineStore('chat', () => {
   /** 记忆相关状态（Phase 3）：本轮注入了几条 / 抽到了几条 */
   const memoryMeta = ref('')
 
+  /** 全部人格的摘要 —— 对话页顶栏的快速切换器用（Phase 4） */
+  const personaList = ref<PersonaSummary[]>([])
+
+  async function refreshPersonaList(): Promise<void> {
+    personaList.value = await listPersonaSummaries()
+  }
+
+  /**
+   * 是否已经完成过「选定当前人格」。
+   *
+   * 🔴 **这个标记是多人格的关键**（2026-09-20 P4 验收实测）：
+   * 之前 `init()` 每次被调用都会重新选「最近更新的人格」——
+   * 单人格时无害，多人格时就成了 bug：
+   * 「在档案页切到甲 → 点对话 → init 又跳回最近更新的乙」，
+   * 之后说的每句话都写进乙，甲永远学不到东西。
+   *
+   * 所以：**首次 init 选人，之后的 init 只负责打开当前人格的会话**。
+   * 人格的显式切换只能走 `switchTo()`。
+   */
+  const initialized = ref(false)
+
   const isEmpty = computed(() => messages.value.length === 0)
 
   /** 供 UI 显示「上一轮用了什么模型、多快」 */
   const statusLine = computed(() => lastMeta.value)
 
   async function init() {
-    try {
-      providers.value = await fetchProviders()
-      const def = providers.value.find((p) => p.isDefault) ?? providers.value[0]
-      currentProvider.value = def?.name ?? ''
-    } catch {
-      providers.value = []
-      error.value = '连不上薄后端，请先运行 npm run server'
+    if (!initialized.value) {
+      try {
+        providers.value = await fetchProviders()
+        const def = providers.value.find((p) => p.isDefault) ?? providers.value[0]
+        currentProvider.value = def?.name ?? ''
+      } catch {
+        providers.value = []
+        error.value = '连不上薄后端，请先运行 npm run server'
+      }
+
+      // 首次进应用：用最近更新过的那份档案兜底；空库时写入内置人格。
+      // 之后的显式切换只能走 switchTo() —— 这是 Phase 4 定下的规则。
+      persona.value = (await latestPersona()) ?? (await seedIfEmpty(ELYSIA_PROFILE))
+      parts.value = buildPromptParts(persona.value)
+      await refreshPersonaList()
+      initialized.value = true
     }
 
-    // 用最近更新过的那份档案 —— Phase 2 约定「刚投料出来的人格就是当前的」
-    // （人格列表与切换是 Phase 4）。空库时把人内置人格写进去兜底。
-    persona.value = (await latestPersona()) ?? (await seedIfEmpty(ELYSIA_PROFILE))
-    parts.value = buildPromptParts(persona.value)
-
+    // 每次进对话页都要按「当前人格」打开会话 —— 即使 persona 没变，
+    // 消息也可能在别的页面（导入/回滚）被动过。
     await openConversation()
   }
 
@@ -81,10 +115,12 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = await loadMessages(conversationId.value)
   }
 
-  /** 切换到另一个人格（Phase 2 投料完成后调用） */
+  /** 切换到另一个人格（投料完成 / 手动切换都会走这里） */
   async function usePersona(next: PersonaProfile) {
     persona.value = next
     parts.value = buildPromptParts(next)
+    // 显式选定过人格之后，后续的 init 不许再自动改选（见 initialized 的注释）
+    initialized.value = true
     lastMeta.value = ''
     await openConversation()
   }
@@ -237,6 +273,14 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /** 切换人格：读档案 → usePersona（会话跟着 personaId 走）→ 刷新切换器 */
+  async function switchTo(id: string): Promise<void> {
+    const p = await getPersona(id)
+    if (!p) return
+    await usePersona(p)
+    await refreshPersonaList()
+  }
+
   return {
     conversationId,
     messages,
@@ -247,6 +291,8 @@ export const useChatStore = defineStore('chat', () => {
     persona,
     /** system 三段（含可选记忆区）—— 内心独白等衍生内容要复用同一份 */
     parts,
+    /** 全部人格摘要 —— 顶栏切换器用（Phase 4） */
+    personaList,
     memoryMeta,
     isEmpty,
     statusLine,
@@ -254,5 +300,7 @@ export const useChatStore = defineStore('chat', () => {
     send,
     reset,
     usePersona,
+    switchTo,
+    refreshPersonaList,
   }
 })

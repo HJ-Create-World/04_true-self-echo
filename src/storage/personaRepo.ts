@@ -48,6 +48,36 @@ export async function listPersonas(): Promise<
   return rows.map(({ id, name, kind, updatedAt }) => ({ id, name, kind, updatedAt }))
 }
 
+/** 管理列表用的摘要 —— 比上面多两个计数，面板上要显示「几条记忆 / 几个会话」 */
+export interface PersonaSummary {
+  id: string
+  name: string
+  kind: PersonaProfile['kind']
+  updatedAt: number
+  memoryCount: number
+  conversationCount: number
+}
+
+export async function listPersonaSummaries(): Promise<PersonaSummary[]> {
+  const rows = await db.personas.orderBy('updatedAt').reverse().toArray()
+  const out: PersonaSummary[] = []
+  for (const row of rows) {
+    const conversationCount = await db.conversations
+      .where('personaId')
+      .equals(row.id)
+      .count()
+    out.push({
+      id: row.id,
+      name: row.profile?.name ?? row.name,
+      kind: row.kind,
+      updatedAt: row.updatedAt,
+      memoryCount: row.profile?.evolving?.memories?.length ?? 0,
+      conversationCount,
+    })
+  }
+  return out
+}
+
 export async function getPersona(id: string): Promise<PersonaProfile | null> {
   const row = await db.personas.get(id)
   return row ? withEvolving(row.profile) : null
@@ -116,4 +146,34 @@ export async function seedIfEmpty(profile: PersonaProfile): Promise<PersonaProfi
   if ((await countPersonas()) === 0) await putPersona(profile)
   const existing = await getPersona(profile.id)
   return existing ?? profile
+}
+
+/**
+ * 级联删除一个人格：档案 + 它的会话 + 消息 + 快照一起删。
+ *
+ * **级联是 HJ 拍板的方案**（2026-09-20）：残留孤儿数据（人格没了但快照还在）
+ * 会在导出/统计时制造麻烦，且这些数据离开人格没有意义；
+ * 更重要的是 SPEC §十二 的「删除我的数据」这条隐私要求，只有级联删才做得到。
+ *
+ * 调用方负责先弹确认框 —— 这里不做任何确认。
+ *
+ * ⚠️ 用一个事务包起来：删到一半失败会比「完全没删」更难排查。
+ */
+export async function deletePersonaCascade(personaId: string): Promise<void> {
+  await db.transaction(
+    'rw',
+    db.personas,
+    db.conversations,
+    db.messages,
+    db.snapshots,
+    async () => {
+      const convs = await db.conversations.where('personaId').equals(personaId).toArray()
+      for (const c of convs) {
+        await db.messages.where('conversationId').equals(c.id as number).delete()
+      }
+      await db.conversations.where('personaId').equals(personaId).delete()
+      await db.snapshots.where('personaId').equals(personaId).delete()
+      await db.personas.delete(personaId)
+    },
+  )
 }

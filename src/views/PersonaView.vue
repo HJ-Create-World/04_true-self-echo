@@ -13,6 +13,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import EvolutionCurve from '@/components/persona/EvolutionCurve.vue'
 import MemoryTimeline from '@/components/persona/MemoryTimeline.vue'
+import PersonaManager from '@/components/persona/PersonaManager.vue'
 import StructureChart from '@/components/persona/StructureChart.vue'
 import type { CurvePoint } from '@/components/persona/EvolutionCurve.vue'
 import { generateMonologue } from '@/persona/monologue'
@@ -70,6 +71,17 @@ async function onRollback(id: number) {
   // 让对话 store 的内存副本同步，否则下一轮还会用回滚前的记忆
   if (evo.persona) chat.persona = { ...chat.persona, evolving: evo.persona.evolving }
 }
+
+/** 切换人格：对话 store 换档案并换会话，本页的图与面板跟着刷新 */
+async function onSwitch(personaId: string) {
+  await chat.switchTo(personaId)
+  await evo.load(personaId)
+}
+
+/** 导入完成后切到新人格，并让对话页的切换器也刷新 */
+async function onImported(personaId: string) {
+  await onSwitch(personaId)
+}
 </script>
 
 <template>
@@ -85,6 +97,12 @@ async function onRollback(id: number) {
     </div>
 
     <main class="flex-1 space-y-4 overflow-y-auto pb-4">
+      <!-- 人格管理（Phase 4）：切换 / 新建 / 导入 / 导出 / 删除 -->
+      <PersonaManager
+        @switch="onSwitch"
+        @imported="onImported"
+      />
+
       <!-- 两张图：不变的 + 变化的 -->
       <div class="grid gap-4 lg:grid-cols-2">
         <section class="rounded-2xl bg-white/60 p-5">
