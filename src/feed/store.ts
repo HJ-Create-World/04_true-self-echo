@@ -8,6 +8,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 
+import { emptyEvolving } from '@/persona/evolving'
 import { emptySource, type PersonaProfile, type SourceNote } from '@/persona/schema'
 import { putPersona } from '@/storage/personaRepo'
 import { analyzeLayer, countChars, detectDistilled, stripRanges } from './analyze'
@@ -189,6 +190,8 @@ export const useFeedStore = defineStore('feed', () => {
       updatedAt: now,
       source: toSourceNote(),
       frozen: draft.value.frozen,
+      // 刚投料出来的人格还没有任何「对用户的认知」—— 演化层从空开始
+      evolving: emptyEvolving(),
       correctionLog: [],
     }
     await putPersona(profile)

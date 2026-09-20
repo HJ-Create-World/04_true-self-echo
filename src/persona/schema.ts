@@ -20,6 +20,8 @@
  *      socialBehavior 重合，先不引入，避免两个容器抢同一份内容
  */
 
+import type { EvolvingLayer } from './evolving'
+
 /** 证据等级，三档必填（persona-schema §四 字段约束） */
 export type EvidenceLevel = 'explicit' | 'implied' | 'extrapolated'
 
@@ -121,6 +123,14 @@ export interface PersonaProfile {
   updatedAt: string
   source: SourceNote
   frozen: FrozenLayer
+  /**
+   * 演化层 —— 对用户的认知 / 关系状态 / 记忆卡片（Phase 3）。
+   *
+   * ⚠️ **它和 frozen 是两种东西，不要混**：
+   * `frozen` 是「她是谁」（AI 不可修改），`evolving` 是「她知道什么」（累积、可回滚）。
+   * 边界规则见 `SPEC.md` §四。
+   */
+  evolving: EvolvingLayer
   correctionLog: CorrectionEntry[]
 }
 

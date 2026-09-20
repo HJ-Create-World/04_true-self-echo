@@ -9,7 +9,21 @@
  */
 
 import db from './db'
+import { plain } from './plain'
+import { emptyEvolving, type EvolvingLayer } from '@/persona/evolving'
 import type { PersonaProfile } from '@/persona/schema'
+
+/**
+ * 兜底补齐 `evolving`。
+ *
+ * db.ts 的 v3 upgrade 已经回填过一次，这里是**第二道防线**：
+ * 万一有档案从别的路径进来（导入的 JSON、旧备份、手工造的测试数据），
+ * 缺这一个字段就会让 Phase 3 的所有读取处崩掉。
+ * 代价是一次浅检查，值得。
+ */
+function withEvolving(p: PersonaProfile): PersonaProfile {
+  return p.evolving ? p : { ...p, evolving: emptyEvolving() }
+}
 
 export interface PersonaRow {
   /** 主键。用 profile.id，不做自增——投料生成的就是稳定 id */
@@ -36,40 +50,25 @@ export async function listPersonas(): Promise<
 
 export async function getPersona(id: string): Promise<PersonaProfile | null> {
   const row = await db.personas.get(id)
-  return row?.profile ?? null
+  return row ? withEvolving(row.profile) : null
 }
 
 /**
  * 取最近更新过的那一份档案。
  *
- * 对话页用它决定「现在跟谁聊」—— Phase 2 还没有人格列表（那是 Phase 4），
+ * 对话页用它决定「现在跟谁聊」—— Phase 3 还没有人格列表（那是 Phase 4），
  * 先约定「刚投料出来的那个人格就是当前的」。
  */
 export async function latestPersona(): Promise<PersonaProfile | null> {
   const row = await db.personas.orderBy('updatedAt').last()
-  return row?.profile ?? null
+  return row ? withEvolving(row.profile) : null
 }
 
 /**
- * 写库前把对象转成「纯对象」。
+ * 新增或覆盖。调用方负责更新 `profile.updatedAt`。
  *
- * 🔴 **这一步不能省**（2026-09-20 实测踩坑）：
- * Vue 的 `ref` / `reactive` 会给对象套一层 **Proxy**，而 IndexedDB 用
- * 结构化克隆（structured clone）序列化，**Proxy 不可克隆** →
- * `DataCloneError: Failed to execute 'put' on 'IDBObjectStore': #<Object> could not be cloned`。
- *
- * 投料流程里 `draft` 是 `ref`，所以从它拼出来的档案一定带 Proxy。
- * `toRaw()` 只解一层（嵌套的数组/对象仍是 Proxy），所以这里用 JSON 往返做**深**拷贝。
- * 档案是纯数据（字符串 / 数字 / 数组 / 普通对象），没有 Date、Map、undefined 函数，
- * JSON 往返不会丢东西。
- *
- * 放在存储层而不是调用方：这是**存储的边界**，不该让每个调用方都记得去 Proxy 化。
+ * ⚠️ 写库前必须 `plain()` —— 见 `./plain.ts` 的说明（Proxy 不可克隆）。
  */
-function plain<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
-}
-
-/** 新增或覆盖。调用方负责更新 `profile.updatedAt`。 */
 export async function putPersona(profile: PersonaProfile): Promise<void> {
   const now = Date.now()
   const existing = await db.personas.get(profile.id)
@@ -81,6 +80,22 @@ export async function putPersona(profile: PersonaProfile): Promise<void> {
     updatedAt: now,
     profile: plain(profile),
   })
+}
+
+/**
+ * 只更新演化层（Phase 3 每轮对话后调用）。
+ *
+ * 单独开一个函数而不是让调用方 `get → 改 → put`：那样容易把整份 profile
+ * （含冻结层）一起写回去，而**冻结层是不该被对话流程碰的**。
+ * 这里刻意只碰 `evolving` 一个字段。
+ */
+export async function saveEvolving(personaId: string, evolving: EvolvingLayer): Promise<void> {
+  await db.personas.where('id').equals(personaId).modify(
+    (row: { profile?: { evolving?: EvolvingLayer }; updatedAt?: number }) => {
+      if (row.profile) row.profile.evolving = plain(evolving)
+      row.updatedAt = Date.now()
+    },
+  )
 }
 
 export async function deletePersona(id: string): Promise<void> {

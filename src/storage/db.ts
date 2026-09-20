@@ -9,6 +9,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 
 import type { PersonaRow } from './personaRepo'
+import type { SnapshotRow } from './snapshotRepo'
 
 export interface MessageRow {
   id?: number
@@ -39,6 +40,7 @@ const db = new Dexie('true-self-echo') as Dexie & {
   conversations: EntityTable<ConversationRow, 'id'>
   messages: EntityTable<MessageRow, 'id'>
   personas: EntityTable<PersonaRow, 'id'>
+  snapshots: EntityTable<SnapshotRow, 'id'>
 }
 
 db.version(1).stores({
@@ -54,6 +56,38 @@ db.version(2).stores({
   messages: '++id, conversationId, createdAt',
   personas: 'id, name, updatedAt',
 })
+
+// v3（2026-09-20，Phase 3）：新增 snapshots 表 + 给已有档案补 evolving 字段。
+// ⚠️ 演化层（memories / userModel / relation）**不单独立表** ——
+// 它整块存在 personas.profile.evolving 里。理由：
+//   ① 检索用的是关键词匹配，几十张卡片在 JS 里过一遍就够，不需要索引
+//   ② 演化层必须和人格一起原子读写，拆表反而要处理两处不一致
+// 只有快照要独立成表 —— 它是一串只增不改的历史记录，量级和读法都不同。
+db.version(3)
+  .stores({
+    conversations: '++id, personaId, updatedAt',
+    messages: '++id, conversationId, createdAt',
+    personas: 'id, name, updatedAt',
+    snapshots: '++id, personaId, at',
+  })
+  // 🔴 **只加表是不够的**：v2 时期存下的档案里根本没有 evolving 字段，
+  // 而 Phase 3 的代码会直接读 `profile.evolving.memories` → 未定义就崩。
+  // 所以必须有一次**数据回填**。这是 Dexie 的 upgrade 回调存在的意义：
+  // 光改 schema 不改数据，老库会以一种很难排查的方式坏掉。
+  .upgrade(async (tx) => {
+    await tx
+      .table('personas')
+      .toCollection()
+      .modify((row: { profile?: { evolving?: unknown } }) => {
+        if (row.profile && !row.profile.evolving) {
+          row.profile.evolving = {
+            userModel: [],
+            relation: { stage: '初识', intimacy: 0, sharedEvents: [] },
+            memories: [],
+          }
+        }
+      })
+  })
 
 /** 取该人格最近一条会话；没有就新建一条。 */
 export async function ensureConversation(

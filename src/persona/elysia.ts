@@ -11,6 +11,7 @@
  * 渲染规则见 `./render.ts`，动渲染前先读那里的警告。
  */
 
+import { emptyEvolving } from './evolving'
 import type { PersonaProfile } from './schema'
 
 export const ELYSIA_PROFILE: PersonaProfile = {
@@ -28,6 +29,8 @@ export const ELYSIA_PROFILE: PersonaProfile = {
     level: '分析层素材（第二层视角为他人转述）',
   },
   correctionLog: [],
+  // 内置人格的演化层起手是空的 —— 它不预置任何「对用户的认知」
+  evolving: emptyEvolving(),
 
   frozen: {
     mechanism:
