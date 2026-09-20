@@ -114,12 +114,17 @@ const INPUT_CLASS =
       <h3 class="m-0 mb-3 text-sm tracking-wide">基本信息</h3>
       <div class="space-y-2">
         <label class="block">
-          <span class="mb-1 block text-xs tracking-wide text-[#3a3a3a]/55">名字</span>
+          <span class="mb-1 block text-xs tracking-wide text-[#3a3a3a]/55">
+            名字
+            <span class="text-[#3a3a3a]/40">
+              · 只是界面上的标签，<span class="text-[#d4a373]">不会进 System Prompt</span>
+            </span>
+          </span>
           <input v-model="name" type="text" :class="INPUT_CLASS" />
         </label>
         <label class="block">
           <span class="mb-1 block text-xs tracking-wide text-[#3a3a3a]/55">
-            一句话气质 <span class="text-[#3a3a3a]/40">· 也会成为每轮重注入的前缀</span>
+            一句话气质 <span class="text-[#3a3a3a]/40">· 会成为每轮重注入的前缀</span>
           </span>
           <input v-model="tagline" type="text" :class="INPUT_CLASS" />
         </label>
@@ -129,7 +134,11 @@ const INPUT_CLASS =
         </label>
       </div>
 
-      <h4 class="m-0 mb-2 mt-4 text-xs tracking-wide text-[#3a3a3a]/55">称呼与关系</h4>
+      <h4 class="m-0 mb-1 mt-4 text-xs tracking-wide text-[#3a3a3a]/55">称呼与关系</h4>
+      <p class="mb-2 mt-0 text-xs leading-relaxed tracking-wide text-[#d4a373]">
+        想让她<span class="text-[#c38d94]">自己说出名字</span>，要填这一节 ——
+        上面那个「名字」只是给你看的标签。
+      </p>
       <div class="space-y-2">
         <label v-for="f in IDENTITY_FIELDS" :key="f.key" class="block">
           <span class="mb-1 block text-xs tracking-wide text-[#3a3a3a]/45">{{ f.label }}</span>
