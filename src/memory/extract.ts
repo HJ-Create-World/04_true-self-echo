@@ -26,8 +26,14 @@ import { MEMORY_LIMIT, mergeMemory, type MemoryCard, type MemoryKind } from '@/p
 export const MEMORY_TEMPERATURE = 0.2
 export const MEMORY_MAX_TOKENS = 1024
 
-/** 低于这个长度的输入直接跳过抽取 —— 「你好」「在吗」里不可能有值得记的事实 */
-export const MIN_EXTRACT_LENGTH = 8
+/**
+ * 低于这个长度的输入直接跳过抽取 —— 「你好」「在吗」里不可能有值得记的事实。
+ *
+ * ⚠️ **别把它调太大**（2026-09-20 实测教训）：设成 8 时，
+ * 「我妹妹叫小雨」这种 6 字但**信息量很高**的输入被跳过了。
+ * 阈值的目的只是滤掉寒暄，不是滤掉短句 —— 短句完全可以有事实。
+ */
+export const MIN_EXTRACT_LENGTH = 5
 
 const KINDS = ['fact', 'preference', 'relation', 'event', 'promise'] as const
 
@@ -100,7 +106,7 @@ export function shouldExtract(userInput: string): boolean {
   const t = userInput.trim()
   if (t.length < MIN_EXTRACT_LENGTH) return false
   // 纯标点/表情/重复字符也跳过
-  return t.replace(/[\s\p{P}\p{S}]/gu, '').length >= MIN_EXTRACT_LENGTH / 2
+  return t.replace(/[\s\p{P}\p{S}]/gu, '').length >= 3
 }
 
 export async function extractMemories(

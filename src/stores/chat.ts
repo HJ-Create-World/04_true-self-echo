@@ -245,6 +245,8 @@ export const useChatStore = defineStore('chat', () => {
     providers,
     currentProvider,
     persona,
+    /** system 三段（含可选记忆区）—— 内心独白等衍生内容要复用同一份 */
+    parts,
     memoryMeta,
     isEmpty,
     statusLine,
