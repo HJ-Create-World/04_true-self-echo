@@ -109,7 +109,7 @@ async function reset() {
       </div>
 
       <p class="mt-3 mb-0 h-4 text-xs tracking-wide text-[#3a3a3a]/40">
-        {{ chat.statusLine }}
+        {{ chat.memoryMeta ? chat.memoryMeta + ' · ' : '' }}{{ chat.statusLine }}
       </p>
     </footer>
   </div>
