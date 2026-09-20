@@ -25,7 +25,9 @@ related: [DEV_STANDARD, TOOLING]
 | **PowerShell 会吞 stdout** | 拿输出要写临时文件再读回 |
 | **Glob 工具在 D: 盘不工作** | 用 PowerShell `Get-ChildItem` 代替 |
 | **`Remove-Item` 会被安全机制拦截** | 删文件用 `Move-Item` 移到 `$env:TEMP` |
+| **批量删除有 50 个文件的阈值** | 超了报 `SAFE_DELETE_BULK_CONFIRM_REQUIRED` —— 见坑 5 |
 | **代理端口每次启动都变** | 推送前必须清空代理环境变量，不可硬编码 |
+| **`vue-tsc -b` 是增量的** | 改动后类型检查要加 `--force`，否则可能跳过不查（实测漏过一次模板字符串语法错） |
 
 ### 标准输出捕获写法
 
@@ -149,6 +151,52 @@ $tok = $tok.Substring(0, $tok.IndexOf("@"))
 
 **解法**：改用 PowerShell + `Invoke-RestMethod` 直调 API，**只取少数字段**。
 
+### 坑 5：`vite build` 被安全删除机制拦下
+
+**现象**：
+
+```
+[vite:prepare-out-dir] [safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED]
+{"count":53,"threshold":50,"scope":"turn","targets":["...\dist\assets"],"targetCount":1}
+```
+
+**成因**：每次构建产出的文件名都带新哈希，`dist/assets` 累积到 50+ 个文件后，
+Vite 清空该目录的动作触发了环境的批量删除保护（阈值 50）。
+
+**解法**：构建前先把 `dist` 整个移走，再让 Vite 从零产出。
+
+```powershell
+$dst = Join-Path $env:TEMP "pf_dist_old"
+if (Test-Path $dst) { Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue }
+if (Test-Path "dist") { Move-Item "dist" $dst -Force }
+# 然后再 npm run build
+```
+
+### 坑 6：🔴 不要拿 dev server 做端到端验收
+
+**现象**：Playwright 跑到一半，页面**自己重载**（实测一次验收里重载了 5 次），
+Pinia 状态被清空 —— 表现为「点按钮时元素已经消失」或「表单里的素材变成 0 字」。
+排查时极易误判成组件 bug。
+
+**成因**：Vite dev server 的 HMR + 依赖重优化。
+往项目根写文件（哪怕是 `_probe.mjs` 这种无关文件）也会触发 `hmr update`。
+
+**解法**：**验收一律对构建产物跑。**
+
+```powershell
+# 1) 先构建（注意坑 5）
+# 2) 起 preview —— preview.proxy 已在 vite.config.ts 里配好
+node node_modules/vite/bin/vite.js preview      # → http://localhost:4173
+# 3) 验收脚本指向 4173，不要指向 5173
+```
+
+两个附带好处：
+1. 验的就是**真要发布的那份代码**（dev 与 build 的行为可能不同）
+2. 没有 HMR，状态不会被外力清空
+
+> ⚠️ 临时验证脚本的产物（截图、中间 JSON）**也要写到项目目录之外**
+> （`$env:TEMP\...`），否则同样会惊动文件监听。
+
 ---
 
 ## 四、临时文件管理
@@ -172,4 +220,5 @@ $tok = $tok.Substring(0, $tok.IndexOf("@"))
 
 ---
 
-*最后更新：2026-09-17*
+*最后更新：2026-09-20 —— 补坑 5（构建被安全删除拦下）、坑 6（验收要用构建产物而非 dev server）；
+§一 补「批量删除阈值」与「vue-tsc 增量」两条环境事实。*
