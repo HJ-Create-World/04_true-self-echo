@@ -25,6 +25,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/FeedView.vue'),
     meta: { title: '投料' },
   },
+  {
+    path: '/persona',
+    name: 'persona',
+    component: () => import('@/views/PersonaView.vue'),
+    meta: { title: '档案' },
+  },
   // 兜底：不写 404 页面，直接回对话页（v1 没有需要保留的旧链接）
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]

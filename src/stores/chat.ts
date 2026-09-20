@@ -26,6 +26,8 @@ import {
   type MessageRow,
 } from '@/storage/db'
 import { latestPersona, saveEvolving, seedIfEmpty } from '@/storage/personaRepo'
+import { appendSnapshot } from '@/storage/snapshotRepo'
+import { frozenHash } from '@/persona/evolving'
 
 /** 历史窗口：保留最近多少轮（§4.3 只截最旧的，永不截 system） */
 const KEEP_ROUNDS = 20
@@ -106,6 +108,8 @@ export const useChatStore = defineStore('chat', () => {
     const isFirst = messages.value.length === 0
     const history = toHistory()
     const now = Date.now()
+    // 记下这一轮**开始前**的演化层 —— 用于判断「这轮有没有真的改变什么」
+    const evolvingBefore = JSON.stringify(persona.value.evolving)
 
     const userRow: MessageRow = {
       conversationId: conversationId.value,
@@ -154,7 +158,29 @@ export const useChatStore = defineStore('chat', () => {
       lastMeta.value = `${res.model} · ${(res.elapsedMs / 1000).toFixed(1)}s · ${res.content.length} 字${warn}`
 
       // 记忆抽取（Phase 3）。放最后：抽取失败**不能**影响这轮对话已经成功的事实。
-      await extractAndStore(input, res.content)
+      const added = await extractAndStore(input, res.content)
+
+      // ⭐ 快照：只在演化层**真的变了**时才记。
+      //    没变化的一轮是重复点，画在曲线上是噪声；而且「回滚到它」没有意义
+      //    （回滚回去和现在一模一样）。只有真实变化才值得留一帧。
+      const evolvingAfter = JSON.stringify(persona.value.evolving)
+      if (evolvingAfter !== evolvingBefore) {
+        try {
+          await appendSnapshot({
+            personaId: persona.value.id,
+            at: new Date().toISOString(),
+            frozenHash: frozenHash(JSON.stringify(persona.value.frozen)),
+            evolving: persona.value.evolving,
+            triggerSummary: added > 0 ? `新增 ${added} 条记忆` : '演化层更新',
+            messageId: botId,
+          })
+        } catch (e) {
+          // 快照失败同样只进状态栏 —— 它不该抹掉一轮成功的对话
+          memoryMeta.value =
+            (memoryMeta.value ? memoryMeta.value + ' · ' : '') +
+            `⚠️ 快照失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 100)
+        }
+      }
     } catch (e) {
       error.value = e instanceof ChatError ? e.message : String(e)
     } finally {
@@ -178,20 +204,20 @@ export const useChatStore = defineStore('chat', () => {
    * 就是被静默吞掉藏了两轮的）。
    * 所以：错误记到 `memoryMeta`（状态栏），不进 `error`（那是聊天错误的位）。
    */
-  async function extractAndStore(userInput: string, assistantReply: string) {
+  async function extractAndStore(userInput: string, assistantReply: string): Promise<number> {
     if (!shouldExtract(userInput)) {
       memoryMeta.value = '（本条太短，未抽取记忆）'
-      return
+      return 0
     }
     try {
       const res = await extractMemories(currentProvider.value, userInput, assistantReply)
       if (res.parseError) {
         memoryMeta.value = `⚠️ 记忆抽取失败：${res.parseError.slice(0, 60)}`
-        return
+        return 0
       }
       if (res.cards.length === 0) {
         memoryMeta.value = `记忆 +0（没有值得记的）`
-        return
+        return 0
       }
 
       const now = new Date().toISOString()
@@ -204,8 +230,10 @@ export const useChatStore = defineStore('chat', () => {
 
       // 抽到的条数可能多于净增数 —— 重复的会被去重合并掉
       memoryMeta.value = `记忆 +${next.length - before}（抽到 ${res.cards.length}，共 ${next.length}）`
+      return next.length - before
     } catch (e) {
       memoryMeta.value = `⚠️ 记忆抽取失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 80)
+      return 0
     }
   }
 

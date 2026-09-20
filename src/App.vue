@@ -12,6 +12,7 @@ import MoodSwitcher from '@/components/MoodSwitcher.vue'
 const NAV = [
   { to: '/', label: '对话' },
   { to: '/feed', label: '投料' },
+  { to: '/persona', label: '档案' },
 ] as const
 </script>
 
