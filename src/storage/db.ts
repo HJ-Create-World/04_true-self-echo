@@ -8,6 +8,8 @@
 
 import Dexie, { type EntityTable } from 'dexie'
 
+import type { PersonaRow } from './personaRepo'
+
 export interface MessageRow {
   id?: number
   conversationId: number
@@ -36,6 +38,7 @@ export interface ConversationRow {
 const db = new Dexie('true-self-echo') as Dexie & {
   conversations: EntityTable<ConversationRow, 'id'>
   messages: EntityTable<MessageRow, 'id'>
+  personas: EntityTable<PersonaRow, 'id'>
 }
 
 db.version(1).stores({
@@ -43,13 +46,23 @@ db.version(1).stores({
   messages: '++id, conversationId, createdAt',
 })
 
-/** 取最近一条会话；没有就新建一条。 */
+// v2（2026-09-20，Phase 2）：新增 personas 表。
+// 主键是字符串 id（投料生成的稳定 id），不是自增——见 personaRepo.ts 的注释。
+// 已有的 conversations / messages 不动，Dexie 会自动补建新表。
+db.version(2).stores({
+  conversations: '++id, personaId, updatedAt',
+  messages: '++id, conversationId, createdAt',
+  personas: 'id, name, updatedAt',
+})
+
+/** 取该人格最近一条会话；没有就新建一条。 */
 export async function ensureConversation(
   personaId: string,
   title = '新的对话',
 ): Promise<ConversationRow> {
-  const last = await db.conversations.orderBy('updatedAt').last()
-  if (last && last.personaId === personaId) return last
+  const rows = await db.conversations.where('personaId').equals(personaId).toArray()
+  const last = rows.sort((a, b) => a.updatedAt - b.updatedAt).pop()
+  if (last) return last
 
   const now = Date.now()
   const id = await db.conversations.add({

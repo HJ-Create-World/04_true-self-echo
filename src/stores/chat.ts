@@ -9,9 +9,11 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { sendChat, fetchProviders, ChatError } from '@/api/chat'
-import type { TurnMessage } from '@/core/prompt'
+import type { SystemPromptParts, TurnMessage } from '@/core/prompt'
 import { buildMessages, trimHistory } from '@/core/prompt'
-import { ELYSIA_PARTS, ELYSIA_META } from '@/persona/elysia'
+import { ELYSIA_PROFILE } from '@/persona/elysia'
+import { buildPromptParts } from '@/persona/render'
+import type { PersonaProfile } from '@/persona/schema'
 import {
   appendMessage,
   clearConversation,
@@ -20,6 +22,7 @@ import {
   retitleFromFirst,
   type MessageRow,
 } from '@/storage/db'
+import { seedIfEmpty } from '@/storage/personaRepo'
 
 /** 历史窗口：保留最近多少轮（§4.3 只截最旧的，永不截 system） */
 const KEEP_ROUNDS = 20
@@ -32,6 +35,14 @@ export const useChatStore = defineStore('chat', () => {
   const providers = ref<{ name: string; model: string; isDefault: boolean }[]>([])
   const currentProvider = ref<string>('')
   const lastMeta = ref<string>('')
+
+  /** 当前正在对话的人格。Phase 1 是内置的，Phase 2 起可从投料结果切换。 */
+  const persona = ref<PersonaProfile>(ELYSIA_PROFILE)
+  /**
+   * system prompt 三段。⚠️ 按 §3.1 **缓存，不要每轮重算** ——
+   * 完整档案每次重渲染既费 CPU，也会让「同一个人格只有一份 reminder」这条失去保障。
+   */
+  const parts = ref<SystemPromptParts>(buildPromptParts(ELYSIA_PROFILE))
 
   const isEmpty = computed(() => messages.value.length === 0)
 
@@ -48,9 +59,25 @@ export const useChatStore = defineStore('chat', () => {
       error.value = '连不上薄后端，请先运行 npm run server'
     }
 
-    const conv = await ensureConversation(ELYSIA_META.id)
+    // 冷启动把人内置人格写进库（空库才播种），之后一律以库里的为准
+    persona.value = await seedIfEmpty(ELYSIA_PROFILE)
+    parts.value = buildPromptParts(persona.value)
+
+    await openConversation()
+  }
+
+  async function openConversation() {
+    const conv = await ensureConversation(persona.value.id)
     conversationId.value = conv.id as number
     messages.value = await loadMessages(conversationId.value)
+  }
+
+  /** 切换到另一个人格（Phase 2 投料完成后调用） */
+  async function usePersona(next: PersonaProfile) {
+    persona.value = next
+    parts.value = buildPromptParts(next)
+    lastMeta.value = ''
+    await openConversation()
   }
 
   /** 把已落库的消息转成发给模型的历史（不含本轮输入） */
@@ -85,7 +112,8 @@ export const useChatStore = defineStore('chat', () => {
 
     try {
       // ⚠️ 顺序约束③④由 buildMessages 统一保证，这里不要再手工拼 reminder
-      const wire = buildMessages(ELYSIA_PARTS, history, input)
+      // 用缓存好的 parts，不要每轮 buildPromptParts（§3.1）
+      const wire = buildMessages(parts.value, history, input)
 
       const res = await sendChat({
         provider: currentProvider.value,
@@ -131,10 +159,12 @@ export const useChatStore = defineStore('chat', () => {
     error,
     providers,
     currentProvider,
+    persona,
     isEmpty,
     statusLine,
     init,
     send,
     reset,
+    usePersona,
   }
 })

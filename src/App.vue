@@ -3,7 +3,6 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 
 import MessageBubble from '@/components/MessageBubble.vue'
 import MoodSwitcher from '@/components/MoodSwitcher.vue'
-import { ELYSIA_META } from '@/persona/elysia'
 import { useChatStore } from '@/stores/chat'
 
 const chat = useChatStore()
@@ -54,7 +53,7 @@ async function reset() {
       <div>
         <h1 class="m-0 text-3xl tracking-wide md:text-4xl">真我回响</h1>
         <p class="mt-1 mb-0 text-sm tracking-wide text-[#3a3a3a]/55">
-          与「{{ ELYSIA_META.name }}」对话 · {{ ELYSIA_META.tagline }}
+          与「{{ chat.persona.name }}」对话 · {{ chat.persona.tagline }}
         </p>
       </div>
 

@@ -50,6 +50,9 @@ _test.*
 _temp.*
 _tmp.*
 _*.mjs
+_*.out.txt
+_expected.json
+_s1_*.png
 scratch/
 
 # 模型文件（体积巨大，绝不入库）
