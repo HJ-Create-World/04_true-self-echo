@@ -61,9 +61,32 @@ function newId(): string {
   return `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 }
 
+/**
+ * 两种操作模式（`SPEC.md` §六）。
+ *
+ * `manual` 是默认值，不是随便定的：提取是「一次不可靠的猜测」，
+ * 让用户先看见并校正一遍，比直接落库再等他自己发现不对要诚实得多。
+ * 而且这一步本身就是核心体验（观察 AI 提取了什么 + 学人格怎么建模）。
+ */
+export type FeedMode = 'manual' | 'blackbox'
+
+export const MODES: { key: FeedMode; label: string; hint: string }[] = [
+  {
+    key: 'manual',
+    label: '手动微调',
+    hint: '提取完先让你逐字段过一遍，改完再存',
+  },
+  {
+    key: 'blackbox',
+    label: '一键黑盒',
+    hint: '提取完直接存下、直接开聊，不看中间过程',
+  },
+]
+
 export const useFeedStore = defineStore('feed', () => {
   const raw = ref('')
   const tier = ref<SourceTier>('verbatim')
+  const mode = ref<FeedMode>('manual')
   /** 勾选「要剔除」的段落下标。默认全选 —— 被标出来的基本都是该剔的 */
   const marked = ref<Set<number>>(new Set())
   const fileError = ref<string | null>(null)
@@ -196,9 +219,21 @@ export const useFeedStore = defineStore('feed', () => {
     return note
   }
 
+  /**
+   * 一键黑盒：提取 + 落库一步到位。
+   * 与手动微调的区别**只在于有没有给用户看/改的机会** ——
+   * 底层都是同一次提取、同一份 `save()`。
+   */
+  async function extractAndSave(provider: string): Promise<PersonaProfile | null> {
+    await extract(provider)
+    if (!draft.value) return null
+    return save()
+  }
+
   return {
     raw,
     tier,
+    mode,
     marked,
     hits,
     layer,
@@ -222,6 +257,7 @@ export const useFeedStore = defineStore('feed', () => {
     loadFile,
     reset,
     extract,
+    extractAndSave,
     save,
     toSourceNote,
   }
