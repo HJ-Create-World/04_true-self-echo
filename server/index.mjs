@@ -48,7 +48,7 @@ async function readBody(req, limit = 4 * 1024 * 1024) {
 }
 
 /* ---------- 上游调用 ---------- */
-async function callUpstream(cfg, messages, temperature) {
+async function callUpstream(cfg, messages, temperature, maxTokens, jsonMode) {
   const headers = { 'Content-Type': 'application/json' }
   // Ollama 本地服务不需要 Authorization
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`
@@ -67,7 +67,10 @@ async function callUpstream(cfg, messages, temperature) {
         temperature,
         top_p: SAMPLING.top_p,
         frequency_penalty: SAMPLING.frequency_penalty,
-        max_tokens: SAMPLING.max_tokens,
+        // 提取流程要传大值（产出完整 JSON），对话用默认 2048
+        max_tokens: maxTokens ?? SAMPLING.max_tokens,
+        // 提取流程要求严格 JSON。不加的话模型会在长输出里漏转义，整份 JSON 报废。
+        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
         thinking: THINKING_OFF,
       }),
     })
@@ -99,7 +102,7 @@ function normalize(data) {
 /* ---------- 路由：POST /api/chat ---------- */
 async function handleChat(req, res) {
   const body = await readBody(req)
-  const { provider, system, history = [], userInput, temperature } = body
+  const { provider, system, history = [], userInput, temperature, maxTokens, responseFormat } = body
 
   if (!userInput || typeof userInput !== 'string') {
     return sendJSON(res, 400, { error: 'userInput 不能为空' })
@@ -117,7 +120,7 @@ async function handleChat(req, res) {
 
   for (let attempt = 0; attempt < RETRY_TEMPERATURES.length; attempt++) {
     const temp = temperature ?? RETRY_TEMPERATURES[attempt]
-    const data = await callUpstream(cfg, messages, temp)
+    const data = await callUpstream(cfg, messages, temp, maxTokens, responseFormat === 'json')
     const { content, finishReason, usage } = normalize(data)
 
     const [degen, repLen, repCount] = isDegenerate(content)

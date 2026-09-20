@@ -25,6 +25,20 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    // `vite preview` 跑的是构建产物。**同样要挂代理** ——
+    // 否则预览时 /api 全 404，验收只能对着 dev server 做，
+    // 而 dev server 的 HMR 会在验收过程中重载页面、清空应用状态
+    // （2026-09-20 实测：一次验收里页面自己重载了 5 次）。
+    // 用构建产物验收还有个额外好处：验的就是真要发布的那份代码。
+    preview: {
+      port: 4173,
+      proxy: {
+        '/api': {
+          target: backend,
+          changeOrigin: true,
+        },
+      },
+    },
     build: {
       outDir: 'dist',
       // 构建产物里绝不出现密钥：后端只以反向代理形式参与，不打包进前端

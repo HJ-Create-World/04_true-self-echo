@@ -22,7 +22,7 @@ import {
   retitleFromFirst,
   type MessageRow,
 } from '@/storage/db'
-import { seedIfEmpty } from '@/storage/personaRepo'
+import { latestPersona, seedIfEmpty } from '@/storage/personaRepo'
 
 /** 历史窗口：保留最近多少轮（§4.3 只截最旧的，永不截 system） */
 const KEEP_ROUNDS = 20
@@ -59,8 +59,9 @@ export const useChatStore = defineStore('chat', () => {
       error.value = '连不上薄后端，请先运行 npm run server'
     }
 
-    // 冷启动把人内置人格写进库（空库才播种），之后一律以库里的为准
-    persona.value = await seedIfEmpty(ELYSIA_PROFILE)
+    // 用最近更新过的那份档案 —— Phase 2 约定「刚投料出来的人格就是当前的」
+    // （人格列表与切换是 Phase 4）。空库时把人内置人格写进去兜底。
+    persona.value = (await latestPersona()) ?? (await seedIfEmpty(ELYSIA_PROFILE))
     parts.value = buildPromptParts(persona.value)
 
     await openConversation()

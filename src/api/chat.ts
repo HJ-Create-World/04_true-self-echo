@@ -29,6 +29,19 @@ export interface ChatRequest {
   userInput: string
   /** 覆盖采样参数（退化重试时降 temperature 用） */
   temperature?: number
+  /**
+   * 覆盖 max_tokens。对话用默认 2048；
+   * **提取流程要传大值**（要产出完整 JSON，见 `feed/extract.ts`）。
+   */
+  maxTokens?: number
+  /**
+   * 要求上游返回严格 JSON（OpenAI 兼容的 `response_format`）。
+   *
+   * ⚠️ 这不是「锦上添花」—— 实测过：不加这个参数时 deepseek-flash 会在
+   * 5222 字的输出里漏一个转义，整个 JSON 直接解析失败（2026-09-20）。
+   * 提取流程**必须**传 `'json'`。
+   */
+  responseFormat?: 'json'
 }
 
 export interface ChatUsage {

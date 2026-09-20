@@ -8,8 +8,10 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 
-import { emptySource, type SourceNote } from '@/persona/schema'
+import { emptySource, type PersonaProfile, type SourceNote } from '@/persona/schema'
+import { putPersona } from '@/storage/personaRepo'
 import { analyzeLayer, countChars, detectDistilled, stripRanges } from './analyze'
+import { runExtraction, type ExtractionDraft } from './extract'
 
 /**
  * 素材可信度三档（`SPEC.md` §六「素材来源标注」）。
@@ -54,12 +56,30 @@ export function weightTier(chars: number): { label: string; tone: 'bad' | 'ok' |
 /** 支持的文件类型 —— PDF/Word 需要额外解析库，Phase 2 暂缓 */
 export const TEXT_EXT = ['.txt', '.md', '.markdown', '.text']
 
+/** 生成画像 id —— 投料产物不需要自增，用时间 + 随机后缀即可稳定且不撞 */
+function newId(): string {
+  return `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+}
+
 export const useFeedStore = defineStore('feed', () => {
   const raw = ref('')
   const tier = ref<SourceTier>('verbatim')
   /** 勾选「要剔除」的段落下标。默认全选 —— 被标出来的基本都是该剔的 */
   const marked = ref<Set<number>>(new Set())
   const fileError = ref<string | null>(null)
+
+  /** 提取阶段的状态 */
+  const draft = ref<ExtractionDraft | null>(null)
+  const extracting = ref(false)
+  const extractMeta = ref('')
+  const extractError = ref<string | null>(null)
+  /**
+   * 模型原始输出。**解析失败时也要留着** ——
+   * 那是用户唯一能自查/反馈的东西（2026-09-20 实测教训）。
+   */
+  const extractRaw = ref('')
+  /** 保存后得到的档案，用于「去和它聊」 */
+  const saved = ref<PersonaProfile | null>(null)
 
   const hits = computed(() => detectDistilled(raw.value))
   const layer = computed(() => analyzeLayer(raw.value))
@@ -99,6 +119,58 @@ export const useFeedStore = defineStore('feed', () => {
     raw.value = ''
     marked.value = new Set()
     fileError.value = null
+    draft.value = null
+    extractError.value = null
+    extractMeta.value = ''
+    extractRaw.value = ''
+    saved.value = null
+  }
+
+  /** 提取：调 LLM，产出草稿。**不落库** —— 落库要用户确认过（见 save） */
+  async function extract(provider: string) {
+    if (!canProceed.value || extracting.value) return
+    extracting.value = true
+    extractError.value = null
+    draft.value = null
+    extractRaw.value = ''
+    saved.value = null
+    const started = Date.now()
+    try {
+      const res = await runExtraction(cleaned.value, provider)
+      extractRaw.value = res.raw
+      extractMeta.value = `${res.model} · ${((Date.now() - started) / 1000).toFixed(1)}s`
+      if (res.parseError) {
+        extractError.value = res.parseError
+      } else {
+        draft.value = res.draft ?? null
+      }
+    } catch (e) {
+      extractError.value = e instanceof Error ? e.message : String(e)
+    } finally {
+      extracting.value = false
+    }
+  }
+
+  /** 落库。返回存下来的档案，供调用方跳去开聊 */
+  async function save(): Promise<PersonaProfile | null> {
+    if (!draft.value) return null
+    const now = new Date().toISOString()
+    const profile: PersonaProfile = {
+      id: newId(),
+      name: draft.value.name.trim() || '未命名',
+      tagline: draft.value.tagline.trim(),
+      // Phase 2 只投虚拟角色（PLAN.md §二 Phase 2 的确认结论）
+      kind: 'virtual',
+      version: '1.0.0',
+      createdAt: now,
+      updatedAt: now,
+      source: toSourceNote(),
+      frozen: draft.value.frozen,
+      correctionLog: [],
+    }
+    await putPersona(profile)
+    saved.value = profile
+    return profile
   }
 
   /** 读一个本地文本文件。只用 FileReader，不碰后端（数据不出本机） */
@@ -138,11 +210,19 @@ export const useFeedStore = defineStore('feed', () => {
     currentTier,
     canProceed,
     fileError,
+    draft,
+    extracting,
+    extractMeta,
+    extractError,
+    extractRaw,
+    saved,
     toggleMark,
     markAll,
     markNone,
     loadFile,
     reset,
+    extract,
+    save,
     toSourceNote,
   }
 })

@@ -39,6 +39,36 @@ export async function getPersona(id: string): Promise<PersonaProfile | null> {
   return row?.profile ?? null
 }
 
+/**
+ * 取最近更新过的那一份档案。
+ *
+ * 对话页用它决定「现在跟谁聊」—— Phase 2 还没有人格列表（那是 Phase 4），
+ * 先约定「刚投料出来的那个人格就是当前的」。
+ */
+export async function latestPersona(): Promise<PersonaProfile | null> {
+  const row = await db.personas.orderBy('updatedAt').last()
+  return row?.profile ?? null
+}
+
+/**
+ * 写库前把对象转成「纯对象」。
+ *
+ * 🔴 **这一步不能省**（2026-09-20 实测踩坑）：
+ * Vue 的 `ref` / `reactive` 会给对象套一层 **Proxy**，而 IndexedDB 用
+ * 结构化克隆（structured clone）序列化，**Proxy 不可克隆** →
+ * `DataCloneError: Failed to execute 'put' on 'IDBObjectStore': #<Object> could not be cloned`。
+ *
+ * 投料流程里 `draft` 是 `ref`，所以从它拼出来的档案一定带 Proxy。
+ * `toRaw()` 只解一层（嵌套的数组/对象仍是 Proxy），所以这里用 JSON 往返做**深**拷贝。
+ * 档案是纯数据（字符串 / 数字 / 数组 / 普通对象），没有 Date、Map、undefined 函数，
+ * JSON 往返不会丢东西。
+ *
+ * 放在存储层而不是调用方：这是**存储的边界**，不该让每个调用方都记得去 Proxy 化。
+ */
+function plain<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 /** 新增或覆盖。调用方负责更新 `profile.updatedAt`。 */
 export async function putPersona(profile: PersonaProfile): Promise<void> {
   const now = Date.now()
@@ -49,7 +79,7 @@ export async function putPersona(profile: PersonaProfile): Promise<void> {
     kind: profile.kind,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
-    profile,
+    profile: plain(profile),
   })
 }
 
