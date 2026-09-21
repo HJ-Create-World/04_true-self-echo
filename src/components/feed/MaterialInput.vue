@@ -25,6 +25,16 @@ const TONE_CLASS: Record<'bad' | 'ok' | 'good', string> = {
   ok: 'text-[#d4a373]',
   good: 'text-[#85cdca]',
 }
+
+/**
+ * 素材类型。real 一旦确认且素材非空就不能切回 virtual ——
+ * 防止真人素材被存成可导出的 virtual 档案（SPEC §十 第 12 条的绕行路径）。
+ * 想反悔：点「清空」重来。
+ */
+const KINDS = [
+  { key: 'virtual', label: '虚拟角色', hint: '动漫 / 游戏 / 小说 / 原创' },
+  { key: 'real', label: '真人素材', hint: '朋友 / 亲人 —— 需走同意流程' },
+] as const
 </script>
 
 <template>
@@ -60,6 +70,26 @@ const TONE_CLASS: Record<'bad' | 'ok' | 'good', string> = {
       :accept="TEXT_EXT.join(',')"
       @change="onPick"
     />
+
+    <div class="mb-3 flex flex-wrap items-center gap-2">
+      <button
+        v-for="k in KINDS"
+        :key="k.key"
+        type="button"
+        class="rounded-full px-4 py-1.5 text-xs tracking-wide transition-all duration-500 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98]"
+        :class="
+          feed.kind === k.key
+            ? 'bg-[#e8a87c]/16 text-[#3a3a3a]'
+            : 'bg-white/50 text-[#3a3a3a]/55 hover:bg-white/80'
+        "
+        :disabled="feed.kind === 'real' && k.key === 'virtual' && feed.raw.trim().length > 0"
+        :title="feed.kind === 'real' && k.key === 'virtual' ? '真人素材已锁定 —— 清空素材后可重新选择类型' : ''"
+        @click="feed.kind = k.key"
+      >
+        {{ k.label }}
+        <span class="ml-1 text-[#3a3a3a]/40">{{ k.hint }}</span>
+      </button>
+    </div>
 
     <textarea
       :value="feed.raw"

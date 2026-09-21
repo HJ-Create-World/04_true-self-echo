@@ -88,6 +88,21 @@ export const useFeedStore = defineStore('feed', () => {
   const raw = ref('')
   const tier = ref<SourceTier>('verbatim')
   const mode = ref<FeedMode>('manual')
+  /**
+   * 素材类型（PersonaKind 的投料入口子集）。
+   * 🔴 **real 锁死规则**：素材非空时 real 只能进不能出 ——
+   * 否则真人素材可以切成 virtual 存档，而 virtual 档案有导出入口，
+   * SPEC §十 第 12 条的边界就被这条切换路径整个绕穿了。
+   * UI 层的按钮禁用是第一道门，这里的 computed setter 是第二道。
+   */
+  const kindValue = ref<'virtual' | 'real'>('virtual')
+  const kind = computed({
+    get: () => kindValue.value,
+    set: (v) => {
+      if (kindValue.value === 'real' && v === 'virtual' && raw.value.trim().length > 0) return
+      kindValue.value = v
+    },
+  })
   /** 勾选「要剔除」的段落下标。默认全选 —— 被标出来的基本都是该剔的 */
   const marked = ref<Set<number>>(new Set())
   const fileError = ref<string | null>(null)
@@ -141,6 +156,7 @@ export const useFeedStore = defineStore('feed', () => {
 
   function reset() {
     raw.value = ''
+    kindValue.value = 'virtual'
     marked.value = new Set()
     fileError.value = null
     draft.value = null
@@ -183,8 +199,8 @@ export const useFeedStore = defineStore('feed', () => {
       id: newId(),
       name: draft.value.name.trim() || '未命名',
       tagline: draft.value.tagline.trim(),
-      // Phase 2 只投虚拟角色（PLAN.md §二 Phase 2 的确认结论）
-      kind: 'virtual',
+      // 投料入口声明的类型：virtual（Phase 2）/ real（Phase 2.5 同意流程后）
+      kind: kind.value,
       version: '1.0.0',
       createdAt: now,
       updatedAt: now,
@@ -237,6 +253,7 @@ export const useFeedStore = defineStore('feed', () => {
     raw,
     tier,
     mode,
+    kind,
     marked,
     hits,
     layer,

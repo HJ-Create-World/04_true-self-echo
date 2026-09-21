@@ -11,13 +11,17 @@ import { computed, ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 
 import DraftEditor from '@/components/feed/DraftEditor.vue'
+import CloudTransferGuard from '@/components/feed/CloudTransferGuard.vue'
+import { isLocalProvider } from '@/api/provider'
 import { MODES, useFeedStore } from '@/feed/store'
+import { useRealGate } from '@/feed/realGate'
 import { checkCompleteness, checkSoftWarnings } from '@/persona/schema'
 import { useChatStore } from '@/stores/chat'
 
 const feed = useFeedStore()
 const chat = useChatStore()
 const router = useRouter()
+const gate = useRealGate()
 
 /**
  * 用哪个后端跑提取。
@@ -48,6 +52,21 @@ const preview = computed(() => {
 
 const missing = computed(() => (feed.draft ? checkCompleteness(feed.draft.frozen) : []))
 const warns = computed(() => (feed.draft ? checkSoftWarnings(feed.draft.frozen) : []))
+
+/**
+ * 真人素材的两道闸（R5 / R6）—— 提取按钮的硬性前置：
+ * ① 同意流程没走完 → 不给提取
+ * ② 选了云端 provider 但没确认传输告知 → 不给提取
+ * 本地 provider 不受 ② 限制（素材不出设备，R6 的本意）。
+ */
+const providerIsCloud = computed(
+  () => provider.value !== '' && !isLocalProvider(provider.value),
+)
+const extractBlocked = computed(() => {
+  if (feed.kind !== 'real') return false
+  if (!gate.realMaterialConsented.value) return true
+  return providerIsCloud.value && !gate.cloudTransferConsented.value
+})
 
 /**
  * 保存失败必须看得见。
@@ -127,9 +146,13 @@ const BTN_GHOST =
 
     <!-- 未提取 -->
     <div v-if="!feed.draft && !feed.extracting" class="flex flex-wrap items-center gap-4">
-      <button type="button" :disabled="!feed.canProceed" :class="BTN_PRIMARY" @click="onExtract">
+      <button type="button" :disabled="!feed.canProceed || extractBlocked" :class="BTN_PRIMARY" @click="onExtract">
         开始提取
       </button>
+
+      <p v-if="extractBlocked" class="m-0 text-xs tracking-wide text-[#d4a373]">
+        {{ !gate.realMaterialConsented.value ? '先完成上方的同意流程' : '先确认云端传输告知' }}
+      </p>
 
       <label
         v-if="chat.providers.length"
@@ -150,6 +173,14 @@ const BTN_GHOST =
         连不上薄后端 —— 先运行 <code>npm run server</code> 再回来。
       </p>
     </div>
+
+    <!-- R6 · 云端传输关卡（仅真人素材 + 云端 provider 时出现） -->
+    <CloudTransferGuard
+      class="mt-4"
+      :active="feed.kind === 'real'"
+      :provider-name="provider"
+      :ready="chat.providers.length > 0"
+    />
 
     <p v-if="feed.extracting" class="m-0 text-sm tracking-wide text-[#3a3a3a]/65">
       正在提取……（关掉思维链后会快很多，通常几秒到几十秒）

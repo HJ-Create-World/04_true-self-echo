@@ -11,6 +11,7 @@ import { computed, onMounted } from 'vue'
 import CleanPanel from '@/components/feed/CleanPanel.vue'
 import ExtractPanel from '@/components/feed/ExtractPanel.vue'
 import MaterialInput from '@/components/feed/MaterialInput.vue'
+import RealGatePanel from '@/components/feed/RealGatePanel.vue'
 import SourcePicker from '@/components/feed/SourcePicker.vue'
 import { useFeedStore } from '@/feed/store'
 import { useChatStore } from '@/stores/chat'
@@ -42,6 +43,8 @@ const removedChars = computed(() => feed.rawChars - feed.cleanChars)
       <MaterialInput />
 
       <template v-if="feed.rawChars > 0">
+        <!-- 真人素材的同意关卡（R5）：没过这关，提取按钮是死的 -->
+        <RealGatePanel v-if="feed.kind === 'real'" />
         <SourcePicker />
         <CleanPanel />
         <ExtractPanel />
