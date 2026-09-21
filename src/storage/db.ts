@@ -8,6 +8,7 @@
 
 import Dexie, { type EntityTable } from 'dexie'
 
+import type { ConsentRow } from './consentRepo'
 import type { PersonaRow } from './personaRepo'
 import type { SnapshotRow } from './snapshotRepo'
 
@@ -41,6 +42,7 @@ const db = new Dexie('true-self-echo') as Dexie & {
   messages: EntityTable<MessageRow, 'id'>
   personas: EntityTable<PersonaRow, 'id'>
   snapshots: EntityTable<SnapshotRow, 'id'>
+  consents: EntityTable<ConsentRow, 'id'>
 }
 
 db.version(1).stores({
@@ -88,6 +90,18 @@ db.version(3)
         }
       })
   })
+
+// v4（2026-09-20，Phase 2.5）：新增 consents 表。
+// 同意是**事件记录**不是档案字段 —— 独立成表，将来 R8 的「撤回同意入口」
+// 才能按 scope 精确撤回，且审计时能看到「何时同意的哪一版文案」。
+// 只有真人素材流程会写这张表；虚拟角色投料不产生任何同意记录。
+db.version(4).stores({
+  conversations: '++id, personaId, updatedAt',
+  messages: '++id, conversationId, createdAt',
+  personas: 'id, name, updatedAt',
+  snapshots: '++id, personaId, at',
+  consents: '++id, scope, grantedAt',
+})
 
 /** 取该人格最近一条会话；没有就新建一条。 */
 export async function ensureConversation(
