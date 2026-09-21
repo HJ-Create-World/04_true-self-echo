@@ -26,12 +26,14 @@ const gate = useRealGate()
 
 onMounted(() => void gate.refresh())
 
-/** 当前 provider 是否云端 —— 本地（ollama）不需要这道关 */
-const isCloud = computed(() => props.ready && props.providerName !== '' && !isLocalProvider(props.providerName))
+/** 真人素材 + provider 已定 → 就该有一条状态说明（云端要签，本机给安心话术）。
+ *  🔴 初版把 show 写成 active && isCloud，本机分支永远不可达 —— 验收 C6c 抓的。 */
+const show = computed(() => props.active && props.ready && props.providerName !== '')
 
-const show = computed(() => props.active && isCloud.value)
+/** 当前 provider 是否云端 —— 本地（ollama）不需要签传输同意 */
+const isCloud = computed(() => !isLocalProvider(props.providerName))
 
-const needConsent = computed(() => show.value && !gate.cloudTransferConsented.value)
+const needConsent = computed(() => show.value && isCloud.value && !gate.cloudTransferConsented.value)
 
 watch(show, (v) => {
   if (v) void gate.refresh()
