@@ -5,7 +5,7 @@
  * 放投料页 MaterialInput 之下，有记录才显示。
  * 「载入」= 直接把素材正文写进主流程（含目标角色），用户从标注/清洗继续走。
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 import {
   deleteMaterial,
@@ -24,7 +24,12 @@ const fileInput = ref<HTMLInputElement | null>(null)
 async function refresh() {
   items.value = await listMaterials()
 }
-onMounted(refresh)
+onMounted(() => {
+  void refresh()
+  // 语料工作台保存 / 本组件导入后刷新列表 —— 事件解耦，组件互不持有引用
+  window.addEventListener('material-changed', refresh)
+})
+onUnmounted(() => window.removeEventListener('material-changed', refresh))
 
 function fmt(ts: number): string {
   const d = new Date(ts)
@@ -64,6 +69,7 @@ async function onImport(e: Event) {
   }
   input.value = ''
 }
+defineExpose({ refresh })
 </script>
 
 <template>

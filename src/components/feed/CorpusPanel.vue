@@ -35,6 +35,9 @@ async function saveToLibrary() {
   })
   savedNotice.value = `已保存「${name}」到素材库（投料页下方可复用）`
   saveName.value = ''
+  // 🔴 通知 MaterialLibrary 刷新 —— 两个组件互不持有引用，
+  // 第一版漏了这步，保存后列表不出现（E2E C6 抓的）
+  window.dispatchEvent(new CustomEvent('material-changed'))
 }
 
 const stats = computed(() => feed.corpusStats)
