@@ -192,7 +192,12 @@ export const useChatStore = defineStore('chat', () => {
       messages.value.push({ ...botRow, id: botId })
 
       const warn = res.degraded ? ' · ⚠️ 输出退化' : ''
-      lastMeta.value = `${res.model} · ${(res.elapsedMs / 1000).toFixed(1)}s · ${res.content.length} 字${warn}`
+      // Q2 用量透明化：每轮消耗直接可见（缓存命中单列 —— 它是省钱的关键指标）
+      const u = res.usage
+      const usageStr = u
+        ? ` · ↧${fmtTokens(u.prompt)} ↥${fmtTokens(u.completion)}${u.cacheHit ? `（缓存 ${fmtTokens(u.cacheHit)}）` : ''}`
+        : ''
+      lastMeta.value = `${res.model} · ${(res.elapsedMs / 1000).toFixed(1)}s · ${res.content.length} 字${usageStr}${warn}`
 
       // 记忆抽取 + 关系温度（Phase 3）。放最后：抽取失败**不能**影响这轮对话已经成功的事实。
       const ext = await extractAndStore(input, res.content)
@@ -239,8 +244,14 @@ export const useChatStore = defineStore('chat', () => {
     lastMeta.value = ''
   }
 
-  /**
-   * 抽取这一轮的记忆 + 关系温度，并落库。
+/** token 数缩写：1234 → 1.2k，避免状态栏被长数字撑爆 */
+function fmtTokens(n: number): string {
+  if (!n) return '0'
+  return n >= 10000 ? `${(n / 1000).toFixed(1)}k` : n >= 1000 ? `${(n / 1000).toFixed(2)}k` : String(n)
+}
+
+/**
+ * 抽取这一轮的记忆 + 关系温度，并落库。
    *
    * ⚠️ **失败要吞掉，但不能静默**：
    * 记忆是「锦上添花」，它挂了不该让用户看到一条报错打断聊天；

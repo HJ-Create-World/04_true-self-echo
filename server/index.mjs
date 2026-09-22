@@ -118,10 +118,27 @@ async function handleChat(req, res) {
   let lastText = ''
   let lastMeta = null
 
+  /**
+   * 本机用量聚合（Q2 最小版 · 2026-09-22）。
+   * 纯本地路线没有「用户」，这里是**整机**的消耗账本：
+   * 每次上游调用成功就累加，GET /api/usage 读走。
+   * ⚠️ 存内存 —— 重启归零。本地单机场景可接受（要持久化再上 SQLite）。
+   */
+  function recordUsage(u) {
+    const slot = (USAGE.byProvider[cfg.name] ??= { requests: 0, prompt: 0, completion: 0 })
+    USAGE.total.requests += 1
+    USAGE.total.prompt += u.prompt ?? 0
+    USAGE.total.completion += u.completion ?? 0
+    slot.requests += 1
+    slot.prompt += u.prompt ?? 0
+    slot.completion += u.completion ?? 0
+  }
+
   for (let attempt = 0; attempt < RETRY_TEMPERATURES.length; attempt++) {
     const temp = temperature ?? RETRY_TEMPERATURES[attempt]
     const data = await callUpstream(cfg, messages, temp, maxTokens, responseFormat === 'json')
     const { content, finishReason, usage } = normalize(data)
+    recordUsage(usage)
 
     const [degen, repLen, repCount] = isDegenerate(content)
     console.log(
@@ -162,9 +179,14 @@ async function handleChat(req, res) {
 }
 
 /* ---------- 路由表 ---------- */
+/** 本机用量账本（内存态，重启归零 —— 本地单机场景可接受） */
+const USAGE = { since: null, total: { requests: 0, prompt: 0, completion: 0 }, byProvider: {} }
+USAGE.since = new Date().toISOString()
+
 const ROUTES = {
   'GET /api/health': (_req, res) => sendJSON(res, 200, { ok: true, uptime: process.uptime() }),
   'GET /api/providers': (_req, res) => sendJSON(res, 200, { providers: listProviders(ENV) }),
+  'GET /api/usage': (_req, res) => sendJSON(res, 200, USAGE),
   'POST /api/chat': handleChat,
 }
 
