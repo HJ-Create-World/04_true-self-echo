@@ -10,9 +10,10 @@
  *   检测放在组件层（纯 UI 安全提示），不污染 chat store。
  *   🔴 每次命中都显示 —— 安全提示**不做去重**，去重等于漏报。
  */
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { nextTick, computed, onMounted, ref, watch } from 'vue'
 
 import MessageBubble from '@/components/MessageBubble.vue'
+import Dropdown, { type DropdownOption } from '@/components/ui/Dropdown.vue'
 import { CRISIS_NOTICE, detectCrisis } from '@/core/crisis'
 import { useChatStore } from '@/stores/chat'
 import { useRosterStore } from '@/stores/roster'
@@ -24,6 +25,21 @@ const wellbeing = useWellbeingStore()
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
 
+/** 人格下拉（v-model 中转：选中新 id 时才真正切换，避免打开面板就触发） */
+const personaId = computed({
+  get: () => chat.persona.id,
+  set: (id: string) => {
+    if (id && id !== chat.persona.id) void chat.switchTo(id)
+  },
+})
+
+const personaOptions = computed<DropdownOption[]>(() => {
+  const list = chat.personaList.length
+    ? chat.personaList.map((p) => ({ value: p.id, label: p.name }))
+    : [{ value: chat.persona.id, label: chat.persona.name }]
+  return list
+})
+
 /** 本轮输入或最新回复命中危机信号（切人格/清空后自然消失） */
 const crisisShown = ref(false)
 
@@ -33,10 +49,10 @@ onMounted(async () => {
   await scrollToEnd()
 })
 
-async function onSwitchPersona(e: Event) {
-  const id = (e.target as HTMLSelectElement).value
-  if (id && id !== chat.persona.id) await chat.switchTo(id)
-}
+/** 模型下拉选项（含自定义连接；hint 显示模型名） */
+const providerOptions = computed<DropdownOption[]>(() =>
+  chat.providers.map((p) => ({ value: p.name, label: p.name, hint: p.model })),
+)
 
 
 watch(
@@ -81,22 +97,14 @@ async function reset() {
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-4">
-      <div class="flex min-w-0 flex-wrap items-center gap-2">
-        <p class="m-0 shrink-0 text-sm tracking-wide text-[#3a3a3a]/55">与</p>
-        <select
-          :value="chat.persona.id"
-          class="max-w-[10rem] truncate rounded-xl bg-white/60 px-2 py-1 font-serif text-sm tracking-wide text-[#3a3a3a] transition-all duration-500 ease-in-out focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+      <div class="flex min-w-0 flex-wrap items-center gap-2.5">
+        <span class="shrink-0 text-sm tracking-wide text-[#3a3a3a]/55">与</span>
+        <Dropdown
+          v-model="personaId"
+          :options="personaOptions"
           aria-label="切换人格"
-          @change="onSwitchPersona"
-        >
-          <option v-for="p in chat.personaList" :key="p.id" :value="p.id">
-            {{ p.name }}
-          </option>
-          <!-- 列表还没拉到时至少显示当前 -->
-          <option v-if="chat.personaList.length === 0" :value="chat.persona.id">
-            {{ chat.persona.name }}
-          </option>
-        </select>
+          class="shrink-0"
+        />
         <p class="m-0 truncate text-sm tracking-wide text-[#3a3a3a]/55">
           对话<template v-if="chat.persona.tagline"> · {{ chat.persona.tagline }}</template>
         </p>
@@ -106,20 +114,10 @@ async function reset() {
         >
           AI 生成 · 非真人
         </span>
-        <!-- 模型切换（含自定义连接）：聊着聊着换模型是真实需求 -->
-        <select
-          v-model="chat.currentProvider"
-          class="max-w-[7rem] shrink-0 truncate rounded-xl bg-white/60 px-2 py-1 text-xs tracking-wide text-[#3a3a3a]/75 transition-all duration-500 ease-in-out focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 sm:max-w-[9rem]"
-          aria-label="切换模型服务"
-        >
-          <option v-for="p in chat.providers" :key="p.name" :value="p.name">
-            {{ p.name }} · {{ p.model }}
-          </option>
-        </select>
       </div>
       <button
         type="button"
-        class="shrink-0 rounded-full bg-white/60 px-4 py-1.5 text-sm tracking-wide text-[#3a3a3a]/70 transition-all duration-500 ease-in-out hover:bg-[#e8a87c]/10 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98]"
+        class="shrink-0 rounded-xl bg-white/60 px-3 py-1.5 text-sm tracking-wide text-[#3a3a3a]/70 transition-all duration-500 ease-in-out hover:bg-[#e8a87c]/10 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98]"
         @click="reset"
       >
         重新开始
@@ -167,7 +165,7 @@ async function reset() {
         <textarea
           v-model="draft"
           rows="1"
-          placeholder="说点什么……（Enter 发送，Shift+Enter 换行）"
+          placeholder="说点什么……（Enter 发送）"
           class="max-h-40 min-h-[3.25rem] flex-1 resize-none rounded-2xl bg-white/60 px-5 py-3 font-serif text-[15px] leading-relaxed tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 transition-all duration-500 ease-in-out focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
           @keydown="onKeydown"
         />
@@ -181,9 +179,20 @@ async function reset() {
         </button>
       </div>
 
-      <p class="mt-3 mb-0 h-4 text-xs tracking-wide text-[#3a3a3a]/40">
-        {{ chat.memoryMeta ? chat.memoryMeta + ' · ' : '' }}{{ chat.statusLine }}
-      </p>
+      <!-- 模型选择 + 状态行：模型按钮在输入区下方（传统 AI 对话的摆放），向上弹出 -->
+      <div class="mt-2 flex items-center gap-3">
+        <Dropdown
+          v-model="chat.currentProvider"
+          :options="providerOptions"
+          aria-label="切换模型服务"
+          direction="up"
+          compact
+          align="left"
+        />
+        <p class="mb-0 h-4 min-w-0 flex-1 truncate text-xs tracking-wide text-[#3a3a3a]/40">
+          {{ chat.memoryMeta ? chat.memoryMeta + ' · ' : '' }}{{ chat.statusLine }}
+        </p>
+      </div>
     </footer>
   </div>
 </template>
