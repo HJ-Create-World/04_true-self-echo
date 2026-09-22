@@ -14,6 +14,7 @@ import { buildMessages, trimHistory } from '@/core/prompt'
 import { renderMemoryBlock } from '@/memory/inject'
 import { extractMemories, mergeExtracted, shouldExtract } from '@/memory/extract'
 import { selectMemories } from '@/persona/evolving'
+import { applyRelationUpdate } from '@/persona/relation'
 import { ELYSIA_PROFILE } from '@/persona/elysia'
 import { buildPromptParts } from '@/persona/render'
 import type { PersonaProfile } from '@/persona/schema'
@@ -193,8 +194,8 @@ export const useChatStore = defineStore('chat', () => {
       const warn = res.degraded ? ' · ⚠️ 输出退化' : ''
       lastMeta.value = `${res.model} · ${(res.elapsedMs / 1000).toFixed(1)}s · ${res.content.length} 字${warn}`
 
-      // 记忆抽取（Phase 3）。放最后：抽取失败**不能**影响这轮对话已经成功的事实。
-      const added = await extractAndStore(input, res.content)
+      // 记忆抽取 + 关系温度（Phase 3）。放最后：抽取失败**不能**影响这轮对话已经成功的事实。
+      const ext = await extractAndStore(input, res.content)
 
       // ⭐ 快照：只在演化层**真的变了**时才记。
       //    没变化的一轮是重复点，画在曲线上是噪声；而且「回滚到它」没有意义
@@ -207,7 +208,14 @@ export const useChatStore = defineStore('chat', () => {
             at: new Date().toISOString(),
             frozenHash: frozenHash(JSON.stringify(persona.value.frozen)),
             evolving: persona.value.evolving,
-            triggerSummary: added > 0 ? `新增 ${added} 条记忆` : '演化层更新',
+            triggerSummary: [
+              ext.added > 0 ? `新增 ${ext.added} 条记忆` : '',
+              ext.relChanged
+                ? `亲密度 ${persona.value.evolving.relation.intimacy}（${persona.value.evolving.relation.stage}）`
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' · ') || '演化层更新',
             messageId: botId,
           })
         } catch (e) {
@@ -232,44 +240,61 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /**
-   * 抽取这一轮的记忆并落库。
+   * 抽取这一轮的记忆 + 关系温度，并落库。
    *
    * ⚠️ **失败要吞掉，但不能静默**：
    * 记忆是「锦上添花」，它挂了不该让用户看到一条报错打断聊天；
    * 但也不能什么都不做 —— 否则抽取功能坏了没人知道（Phase 2 的 DataCloneError
    * 就是被静默吞掉藏了两轮的）。
    * 所以：错误记到 `memoryMeta`（状态栏），不进 `error`（那是聊天错误的位）。
+   *
+   * 返回 { added, relChanged }：send() 用它拼快照的 triggerSummary。
    */
-  async function extractAndStore(userInput: string, assistantReply: string): Promise<number> {
+  async function extractAndStore(
+    userInput: string,
+    assistantReply: string,
+  ): Promise<{ added: number; relChanged: boolean }> {
     if (!shouldExtract(userInput)) {
       memoryMeta.value = '（本条太短，未抽取记忆）'
-      return 0
+      return { added: 0, relChanged: false }
     }
     try {
       const res = await extractMemories(currentProvider.value, userInput, assistantReply)
       if (res.parseError) {
         memoryMeta.value = `⚠️ 记忆抽取失败：${res.parseError.slice(0, 60)}`
-        return 0
-      }
-      if (res.cards.length === 0) {
-        memoryMeta.value = `记忆 +0（没有值得记的）`
-        return 0
+        return { added: 0, relChanged: false }
       }
 
-      const now = new Date().toISOString()
-      const before = persona.value.evolving.memories.length
-      const next = mergeExtracted(persona.value.evolving.memories, res.cards, now, () =>
+      // 关系推进与记忆共用同一份演化层。
+      // 🔴 cards 为 0 也**不能提前返回** —— 聊了心事但「没有可记事实」的一轮，
+      //    关系照样该推进；提前返回会让亲密度在整段走心对话里纹丝不动。
+      const withRelation = applyRelationUpdate(persona.value.evolving, res.relation)
+      const relChanged = withRelation !== persona.value.evolving
+      const before = withRelation.memories.length
+      const next = mergeExtracted(withRelation.memories, res.cards, new Date().toISOString(), () =>
         `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
       )
-      persona.value.evolving = { ...persona.value.evolving, memories: next }
+      const gained = next.length - before
+
+      if (gained === 0 && !relChanged) {
+        memoryMeta.value = `记忆 +0（没有值得记的）`
+        return { added: 0, relChanged: false }
+      }
+
+      persona.value.evolving = { ...withRelation, memories: next }
       await saveEvolving(persona.value.id, persona.value.evolving)
 
       // 抽到的条数可能多于净增数 —— 重复的会被去重合并掉
-      memoryMeta.value = `记忆 +${next.length - before}（抽到 ${res.cards.length}，共 ${next.length}）`
-      return next.length - before
+      const parts = [`记忆 +${gained}（抽到 ${res.cards.length}，共 ${next.length}）`]
+      if (relChanged) {
+        const rel = persona.value.evolving.relation
+        parts.push(`亲密度 ${rel.intimacy} · ${rel.stage}`)
+      }
+      memoryMeta.value = parts.join(' · ')
+      return { added: gained, relChanged }
     } catch (e) {
       memoryMeta.value = `⚠️ 记忆抽取失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 80)
-      return 0
+      return { added: 0, relChanged: false }
     }
   }
 

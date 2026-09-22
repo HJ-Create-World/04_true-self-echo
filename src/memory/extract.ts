@@ -22,6 +22,7 @@
 
 import { sendChat } from '@/api/chat'
 import { MEMORY_LIMIT, mergeMemory, type MemoryCard, type MemoryKind } from '@/persona/evolving'
+import type { RelationUpdate } from '@/persona/relation'
 
 export const MEMORY_TEMPERATURE = 0.2
 export const MEMORY_MAX_TOKENS = 1024
@@ -77,11 +78,25 @@ export const MEMORY_EXTRACT_SYSTEM = `你的任务：从这一轮对话里，找
 1–5。5 = 明确要求你记住 / 对关系很重要；3 = 有用的背景；1 = 顺带一提。
 **大多数应该是 2–3。** 全都打 5 会让重要度失去意义。
 
+## 关于 relation（关系温度）
+
+除了记忆，你还要评估**这一轮对话对两人关系的推进**：
+
+- intimacyDelta：-2 到 2 的整数。
+  - **0 = 普通闲聊、一问一答（大多数轮都应该是 0）**
+  - 1 = 有真实的情感交流（分享心事、安慰到位、聊得投机）
+  - 2 = 少见的重大时刻（相互交底、共同经历一件大事）
+  - 负数 = 被冒犯、被误解、争执收场
+- sharedEvent：只有发生了**值得两人都记住的具体事件**才写（一句话，
+  40 字以内，如「一起决定周末去看海」）；没有就写 ""。
+
+🔴 不要为了「显得有进展」而给正分 —— 亲密度被灌水会让它彻底失去意义。
+
 ## 输出格式
 
 **只输出 JSON**，不要开场白、不要围栏：
 
-{ "memories": [ { "kind": "fact", "content": "…", "triggers": ["…"], "importance": 3 } ] }
+{ "memories": [ { "kind": "fact", "content": "…", "triggers": ["…"], "importance": 3 } ], "relation": { "intimacyDelta": 0, "sharedEvent": "" } }
 
 字符串内容里不要使用英文双引号（ASCII 的 0x22），引用一律用「」；
 也不要用中文引号 “ ” —— 它们会把 JSON 弄坏。`
@@ -95,6 +110,8 @@ export interface ExtractedMemory {
 
 export interface MemoryExtractResult {
   cards: ExtractedMemory[]
+  /** 关系温度评估 —— 与记忆同一次调用产出，没有则视为零变化 */
+  relation: RelationUpdate
   raw: string
   model: string
   elapsedMs: number
@@ -137,6 +154,7 @@ export async function extractMemories(
   } catch (e) {
     return {
       cards: [],
+      relation: { intimacyDelta: 0, sharedEvent: '' },
       raw: res.content,
       model: res.model,
       elapsedMs: res.elapsedMs,
@@ -164,7 +182,15 @@ export async function extractMemories(
         .filter((c) => c.content.length > 0)
     : []
 
-  return { cards, raw: res.content, model: res.model, elapsedMs: res.elapsedMs }
+  // relation 缺失（老模型没输出这个字段）= 零变化，无害
+  const rel = (obj as { relation?: unknown }).relation
+  const relRaw = typeof rel === 'object' && rel !== null ? (rel as Record<string, unknown>) : {}
+  const relation: RelationUpdate = {
+    intimacyDelta: Number(relRaw.intimacyDelta ?? 0) || 0,
+    sharedEvent: String(relRaw.sharedEvent ?? ''),
+  }
+
+  return { cards, relation, raw: res.content, model: res.model, elapsedMs: res.elapsedMs }
 }
 
 /** 把抽取结果合并进演化层（去重 + 容量淘汰都在 `mergeMemory` 里） */
