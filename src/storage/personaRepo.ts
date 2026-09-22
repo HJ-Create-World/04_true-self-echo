@@ -144,23 +144,15 @@ export async function deletePersona(id: string): Promise<void> {
  * 调用方负责先弹确认框 —— 这里不做任何确认。
  */
 export async function deleteAllData(): Promise<void> {
-  await db.transaction(
-    'rw',
-    db.personas,
-    db.conversations,
-    db.messages,
-    db.snapshots,
-    db.consents,
-    async () => {
-      await Promise.all([
-        db.personas.clear(),
-        db.conversations.clear(),
-        db.messages.clear(),
-        db.snapshots.clear(),
-        db.consents.clear(),
-      ])
-    },
-  )
+  // ⚠️ Dexie 事务的表参数上限是 6 张（含类型重载），我们有 6 张用户数据表装不下。
+  // 权衡：放弃跨表原子性，改为顺序 clear —— 每张表内部仍是原子的，
+  // 中途失败最坏留下「部分清空」，用户重按一次即可（该场景仅手动触发，可接受）。
+  await db.personas.clear()
+  await db.conversations.clear()
+  await db.messages.clear()
+  await db.snapshots.clear()
+  await db.consents.clear()
+  await db.materials.clear()
 }
 
 export async function countPersonas(): Promise<number> {

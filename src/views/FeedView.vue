@@ -12,6 +12,7 @@ import CleanPanel from '@/components/feed/CleanPanel.vue'
 import CorpusPanel from '@/components/feed/CorpusPanel.vue'
 import ExtractPanel from '@/components/feed/ExtractPanel.vue'
 import MaterialInput from '@/components/feed/MaterialInput.vue'
+import MaterialLibrary from '@/components/feed/MaterialLibrary.vue'
 import RealGatePanel from '@/components/feed/RealGatePanel.vue'
 import SourcePicker from '@/components/feed/SourcePicker.vue'
 import { useFeedStore } from '@/feed/store'
@@ -42,6 +43,9 @@ const removedChars = computed(() => feed.rawChars - feed.cleanChars)
 
     <main class="flex-1 space-y-4 overflow-y-auto pb-4">
       <MaterialInput />
+
+      <!-- 素材库（A3）：预处理产物的复用入口，有记录才显示 -->
+      <MaterialLibrary />
 
       <!-- JSONL 语料预处理工作台（载入语料后显示，拼装完成前主流程隐藏） -->
       <CorpusPanel v-if="feed.corpusMode" />

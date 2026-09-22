@@ -9,6 +9,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 
 import type { ConsentRow } from './consentRepo'
+import type { MaterialRow } from './materialRepo'
 import type { PersonaRow } from './personaRepo'
 import type { SnapshotRow } from './snapshotRepo'
 
@@ -43,6 +44,7 @@ const db = new Dexie('true-self-echo') as Dexie & {
   personas: EntityTable<PersonaRow, 'id'>
   snapshots: EntityTable<SnapshotRow, 'id'>
   consents: EntityTable<ConsentRow, 'id'>
+  materials: EntityTable<MaterialRow, 'id'>
 }
 
 db.version(1).stores({
@@ -101,6 +103,18 @@ db.version(4).stores({
   personas: 'id, name, updatedAt',
   snapshots: '++id, personaId, at',
   consents: '++id, scope, grantedAt',
+})
+
+// v5（2026-09-22，语料通道）：materials 表 —— 预处理产物的存/删/导出/复用。
+// 存的是**拼装后的最终素材**（可直接投料），不是原始语料 —— 原始 19MB 语料
+// 没有入库价值（文件在用户手里，重预处理是纯本地操作）。
+db.version(5).stores({
+  conversations: '++id, personaId, updatedAt',
+  messages: '++id, conversationId, createdAt',
+  personas: 'id, name, updatedAt',
+  snapshots: '++id, personaId, at',
+  consents: '++id, scope, grantedAt',
+  materials: '++id, createdAt',
 })
 
 /** 取该人格最近一条会话；没有就新建一条。 */

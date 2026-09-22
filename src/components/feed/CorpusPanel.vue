@@ -13,10 +13,29 @@ import { computed, ref } from 'vue'
 
 import { countByChapter } from '@/feed/corpus'
 import { useFeedStore } from '@/feed/store'
+import { saveMaterial } from '@/storage/materialRepo'
 
 const feed = useFeedStore()
 const roleQuery = ref('')
 const ROLE_PAGE = 50
+
+/* ---------- 保存到素材库（A3） ---------- */
+const saveName = ref('')
+const savedNotice = ref<string | null>(null)
+async function saveToLibrary() {
+  const a = feed.corpusAssembled
+  if (!a?.text) return
+  const name =
+    saveName.value.trim() || `${feed.corpusRole} · ${a.usedChapterIds.length} 章`
+  await saveMaterial({
+    name,
+    protagonist: feed.corpusRole.trim(),
+    source: `JSONL 语料 · ${a.usedChapterIds.length} 章 · ${a.utterances} 句`,
+    content: a.text,
+  })
+  savedNotice.value = `已保存「${name}」到素材库（投料页下方可复用）`
+  saveName.value = ''
+}
 
 const stats = computed(() => feed.corpusStats)
 
@@ -147,7 +166,20 @@ function apply() {
         选了章节但拼不出内容 —— 检查这些章节里她有没有台词。
       </p>
 
-      <div class="mt-3 flex justify-end">
+      <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
+        <input
+          v-model="saveName"
+          placeholder="素材名称（留空自动生成）"
+          class="w-52 rounded-xl bg-white/70 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+        />
+        <button
+          type="button"
+          :disabled="!assembled?.text"
+          class="rounded-2xl bg-white/70 px-4 py-2.5 text-xs tracking-wide text-[#3a3a3a]/70 transition-all duration-500 ease-in-out hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+          @click="saveToLibrary"
+        >
+          保存为素材
+        </button>
         <button
           type="button"
           :disabled="!assembled?.text"
@@ -157,6 +189,12 @@ function apply() {
           用作素材，继续投料
         </button>
       </div>
+      <p
+        v-if="savedNotice"
+        class="mb-0 mt-2 text-right text-xs tracking-wide text-[#85cdca]"
+      >
+        {{ savedNotice }}
+      </p>
     </div>
   </section>
 </template>
