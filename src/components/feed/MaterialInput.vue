@@ -159,7 +159,7 @@ const checklist = computed(() => [
         @click="feed.kind = k.key"
       >
         {{ k.label }}
-        <span class="ml-1 text-[#3a3a3a]/40">{{ k.hint }}</span>
+        <span class="ml-1 hidden text-[#3a3a3a]/40 sm:inline">{{ k.hint }}</span>
       </button>
     </div>
 

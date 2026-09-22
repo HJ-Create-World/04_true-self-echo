@@ -29,23 +29,24 @@ onMounted(() => wellbeing.start())
 </script>
 
 <template>
-  <div class="mx-auto flex h-screen w-full max-w-4xl flex-col px-6">
-    <header class="flex items-center justify-between gap-4 py-6">
-      <h1 class="m-0 text-3xl tracking-wide md:text-4xl">真我回响</h1>
+  <div class="mx-auto flex h-screen w-full max-w-4xl flex-col px-4 sm:px-6">
+    <!-- 小屏两行：标题 / 导航 / 主题切换各占一行；sm 起恢复单行三段 -->
+    <header class="flex flex-col gap-2.5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-6">
+      <h1 class="m-0 text-2xl tracking-wide md:text-4xl">真我回响</h1>
 
-      <nav class="flex items-center gap-1 rounded-full bg-white/50 p-1">
+      <nav class="flex items-stretch gap-1 rounded-full bg-white/50 p-1 sm:mx-auto">
         <RouterLink
           v-for="item in NAV"
           :key="item.to"
           :to="item.to"
-          class="rounded-full px-4 py-1.5 text-sm tracking-wide text-[#3a3a3a]/60 no-underline transition-all duration-500 ease-in-out hover:text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+          class="flex-1 whitespace-nowrap rounded-full px-3 py-1.5 text-center text-sm tracking-wide text-[#3a3a3a]/60 no-underline transition-all duration-500 ease-in-out hover:text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 sm:flex-none sm:px-4"
           active-class="bg-white/80 text-[#3a3a3a] shadow-[0_4px_20px_rgba(74,111,165,0.12)]"
         >
           {{ item.label }}
         </RouterLink>
       </nav>
 
-      <MoodSwitcher />
+      <MoodSwitcher class="max-sm:w-full max-sm:justify-between" />
     </header>
 
     <RouterView />
