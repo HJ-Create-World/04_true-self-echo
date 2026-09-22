@@ -3,17 +3,29 @@
  * 对话页 —— 内容基本是 Phase 1 的 App.vue 原样搬过来，
  * 只多了顶部一行「当前人格」与「重新开始」的位置（原来在外壳的 header 里）。
  * Phase 4 加了顶栏的人格快速切换器。
+ *
+ * 合规设施（2026-09-22）：
+ * - R1 常驻徽章「AI 生成 · 非真人」（与首访遮罩配套，法规要求常驻可见）
+ * - R9 危机提示条：输入 + 回复两侧关键词命中时叠加求助信息。
+ *   检测放在组件层（纯 UI 安全提示），不污染 chat store。
+ *   🔴 每次命中都显示 —— 安全提示**不做去重**，去重等于漏报。
  */
 import { nextTick, onMounted, ref, watch } from 'vue'
 
 import MessageBubble from '@/components/MessageBubble.vue'
+import { CRISIS_NOTICE, detectCrisis } from '@/core/crisis'
 import { useChatStore } from '@/stores/chat'
 import { useRosterStore } from '@/stores/roster'
+import { useWellbeingStore } from '@/stores/wellbeing'
 
 const chat = useChatStore()
 const roster = useRosterStore()
+const wellbeing = useWellbeingStore()
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
+
+/** 本轮输入或最新回复命中危机信号（切人格/清空后自然消失） */
+const crisisShown = ref(false)
 
 onMounted(async () => {
   await chat.init()
@@ -29,7 +41,11 @@ async function onSwitchPersona(e: Event) {
 
 watch(
   () => chat.messages.length,
-  () => scrollToEnd(),
+  () => {
+    const last = chat.messages[chat.messages.length - 1]
+    if (last?.role === 'assistant' && detectCrisis(last.content)) crisisShown.value = true
+    void scrollToEnd()
+  },
 )
 
 async function scrollToEnd() {
@@ -41,6 +57,8 @@ async function scrollToEnd() {
 async function submit() {
   const text = draft.value
   if (!text.trim() || chat.streaming) return
+  if (detectCrisis(text)) crisisShown.value = true
+  wellbeing.onMessage()
   draft.value = ''
   await chat.send(text)
 }
@@ -55,6 +73,7 @@ function onKeydown(e: KeyboardEvent) {
 
 async function reset() {
   if (!confirm('清空当前对话？此操作不可撤销。')) return
+  crisisShown.value = false
   await chat.reset()
 }
 </script>
@@ -81,6 +100,12 @@ async function reset() {
         <p class="m-0 truncate text-sm tracking-wide text-[#3a3a3a]/55">
           对话<template v-if="chat.persona.tagline"> · {{ chat.persona.tagline }}</template>
         </p>
+        <!-- R1 常驻标识：法规要求对话页可见的 AI 身份标识，不得藏在协议里 -->
+        <span
+          class="shrink-0 rounded-full bg-[#4a6fa5]/10 px-2.5 py-0.5 text-xs tracking-wide text-[#4a6fa5]"
+        >
+          AI 生成 · 非真人
+        </span>
       </div>
       <button
         type="button"
@@ -92,6 +117,17 @@ async function reset() {
     </div>
 
     <main ref="scroller" class="flex-1 space-y-6 overflow-y-auto pb-4" aria-live="polite">
+      <!-- R9 危机提示条：置顶常驻直至离开本会话 —— 安全提示不随消息滚走 -->
+      <div
+        v-if="crisisShown"
+        class="rounded-2xl border border-[#c38d94]/30 bg-[#c38d94]/10 px-5 py-3"
+        role="alert"
+      >
+        <p class="m-0 text-sm leading-relaxed tracking-wide text-[#c38d94]">
+          {{ CRISIS_NOTICE }}
+        </p>
+      </div>
+
       <p v-if="chat.isEmpty" class="mt-24 text-center text-base tracking-wide text-[#3a3a3a]/45">
         说点什么吧，她一直在～
       </p>

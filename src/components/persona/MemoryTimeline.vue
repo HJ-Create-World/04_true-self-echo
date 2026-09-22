@@ -4,8 +4,12 @@
  *
  * 拆出来是因为 PersonaView 还要放两张图和内心独白 ——
  * 不拆的话它必然破 200 行。
+ *
+ * 触发词编辑（2026-09-22 补，D004 缓解措施）：抽取器给的触发词是猜测，
+ * 用户最清楚「我以后会怎么说这件事」—— 卡片内容不改（那是模型记的事实），
+ * 检索参数（触发词）归用户管。校验与抽取侧同规则：0–4 个、每个 2–6 字。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { MEMORY_KIND_LABEL, type MemoryKind } from '@/persona/evolving'
 import { useEvolutionStore } from '@/stores/evolution'
@@ -13,6 +17,58 @@ import { useEvolutionStore } from '@/stores/evolution'
 const emit = defineEmits<{ rollback: [snapshotId: number] }>()
 
 const evo = useEvolutionStore()
+
+/* ---------- 触发词编辑状态 ---------- */
+const editingId = ref<string | null>(null)
+const draft = ref<string[]>([])
+const draftInput = ref('')
+const editError = ref<string | null>(null)
+
+function startEdit(id: string, triggers: string[]) {
+  editingId.value = id
+  draft.value = [...triggers]
+  draftInput.value = ''
+  editError.value = null
+}
+
+function cancelEdit() {
+  editingId.value = null
+  draft.value = []
+  editError.value = null
+}
+
+function addDraft() {
+  const t = draftInput.value.trim()
+  if (!t) return
+  if (draft.value.includes(t)) {
+    editError.value = '这个词已经在了'
+    return
+  }
+  if (t.length < 2 || t.length > 6) {
+    editError.value = '触发词要 2–6 个字（和你平时会说的话一样长）'
+    return
+  }
+  if (draft.value.length >= 4) {
+    editError.value = '最多 4 个 —— 太多会让这条记忆每轮都被注入'
+    return
+  }
+  draft.value.push(t)
+  draftInput.value = ''
+  editError.value = null
+}
+
+async function saveEdit(id: string) {
+  if (draftInput.value.trim()) addDraft()
+  if (editError.value) return
+  await evo.updateTriggers(id, [...draft.value])
+  cancelEdit()
+}
+
+async function removeCard(id: string, content: string) {
+  if (confirm(`删掉这条记忆？\n「${content.slice(0, 40)}…」\n删掉后她就不记得这件事了（当前快照仍留档）。`)) {
+    await evo.deleteMemory(id)
+  }
+}
 
 const groups = computed(() => {
   const mem = evo.persona?.evolving.memories ?? []
@@ -64,12 +120,72 @@ function onRollback(id: number) {
           class="rounded-xl border border-[#4a6fa5]/15 bg-white/40 px-4 py-2.5"
         >
           <p class="m-0 text-sm leading-relaxed tracking-wide text-[#3a3a3a]">{{ m.content }}</p>
-          <p class="mb-0 mt-1 text-xs tracking-wide text-[#3a3a3a]/40">
-            {{ fmt(m.createdAt) }} · 重要度 {{ m.importance }} ·
-            被用上 {{ m.hitCount }} 次 ·
-            <span v-if="m.triggers.length">触发词 {{ m.triggers.join(' / ') }}</span>
-            <span v-else class="text-[#d4a373]">没有触发词（只能走常驻区）</span>
-          </p>
+
+          <!-- 展示态：触发词 chips + 编辑/删除 -->
+          <template v-if="editingId !== m.id">
+            <p class="mb-0 mt-1 text-xs tracking-wide text-[#3a3a3a]/40">
+              {{ fmt(m.createdAt) }} · 重要度 {{ m.importance }} ·
+              被用上 {{ m.hitCount }} 次 ·
+              <span v-if="m.triggers.length">触发词 {{ m.triggers.join(' / ') }}</span>
+              <span v-else class="text-[#d4a373]">没有触发词（只能走常驻区）</span>
+            </p>
+            <div class="mt-1.5 flex gap-2">
+              <button
+                type="button"
+                class="rounded-full bg-white/60 px-3 py-0.5 text-xs tracking-wide text-[#3a3a3a]/55 transition-all duration-500 ease-in-out hover:bg-[#e8a87c]/12 hover:text-[#3a3a3a] active:scale-[0.98]"
+                @click="startEdit(m.id, m.triggers)"
+              >
+                编辑触发词
+              </button>
+              <button
+                type="button"
+                class="rounded-full bg-white/60 px-3 py-0.5 text-xs tracking-wide text-[#3a3a3a]/45 transition-all duration-500 ease-in-out hover:bg-[#c38d94]/12 hover:text-[#c38d94] active:scale-[0.98]"
+                @click="removeCard(m.id, m.content)"
+              >
+                删除这条记忆
+              </button>
+            </div>
+          </template>
+
+          <!-- 编辑态：chips 增删 + 保存/取消 -->
+          <template v-else>
+            <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <span
+                v-for="t in draft"
+                :key="t"
+                class="inline-flex items-center gap-1 rounded-full bg-[#e8a87c]/14 px-2.5 py-0.5 text-xs tracking-wide text-[#3a3a3a]"
+              >
+                {{ t }}
+                <button type="button" class="text-[#3a3a3a]/40 hover:text-[#c38d94]" @click="draft = draft.filter((x) => x !== t)">×</button>
+              </span>
+              <input
+                v-model="draftInput"
+                placeholder="加一个触发词，回车确认"
+                class="w-44 rounded-full bg-white/70 px-3 py-1 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+                @keydown.enter.prevent="addDraft"
+              />
+            </div>
+            <p v-if="editError" class="mb-0 mt-1.5 text-xs tracking-wide text-[#c38d94]">{{ editError }}</p>
+            <div class="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                class="rounded-full bg-[#4a6fa5] px-4 py-1 text-xs tracking-wide text-white hover:opacity-90 active:scale-[0.98]"
+                @click="saveEdit(m.id)"
+              >
+                保存
+              </button>
+              <button
+                type="button"
+                class="rounded-full bg-white/60 px-4 py-1 text-xs tracking-wide text-[#3a3a3a]/55 hover:bg-white/80"
+                @click="cancelEdit"
+              >
+                取消
+              </button>
+              <span class="text-xs tracking-wide text-[#3a3a3a]/40">
+                触发词是「我以后会怎么说这件事」—— 命中才会被她想起来
+              </span>
+            </div>
+          </template>
         </li>
       </ul>
     </section>

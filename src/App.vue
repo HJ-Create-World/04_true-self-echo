@@ -4,16 +4,27 @@
  *
  * ⚠️ 这里**不放任何业务状态**。人格名、会话、投料进度都由各 view 自己取，
  * 外壳一旦开始持有状态，两个页面就会互相牵扯。
+ *
+ * 全局挂两件合规设施（R1/R2/R3，2026-09-22）：
+ * AiDisclosureGate —— 首访 AI 身份告知遮罩；
+ * WellbeingNotice —— 时长/依赖提醒横幅（心跳由 wellbeing store 驱动）。
  */
+import { onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 
+import AiDisclosureGate from '@/components/AiDisclosureGate.vue'
 import MoodSwitcher from '@/components/MoodSwitcher.vue'
+import WellbeingNotice from '@/components/WellbeingNotice.vue'
+import { useWellbeingStore } from '@/stores/wellbeing'
 
 const NAV = [
   { to: '/', label: '对话' },
   { to: '/feed', label: '投料' },
   { to: '/persona', label: '档案' },
 ] as const
+
+const wellbeing = useWellbeingStore()
+onMounted(() => wellbeing.start())
 </script>
 
 <template>
@@ -37,5 +48,8 @@ const NAV = [
     </header>
 
     <RouterView />
+
+    <AiDisclosureGate />
+    <WellbeingNotice />
   </div>
 </template>

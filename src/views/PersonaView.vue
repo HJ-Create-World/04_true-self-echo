@@ -12,6 +12,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import EvolutionCurve from '@/components/persona/EvolutionCurve.vue'
+import DataRightsPanel from '@/components/persona/DataRightsPanel.vue'
 import MemoryTimeline from '@/components/persona/MemoryTimeline.vue'
 import PersonaManager from '@/components/persona/PersonaManager.vue'
 import StructureChart from '@/components/persona/StructureChart.vue'
@@ -102,6 +103,9 @@ async function onImported(personaId: string) {
         @switch="onSwitch"
         @imported="onImported"
       />
+
+      <!-- 数据与权利（R8）：撤回同意 / 删除全部数据 -->
+      <DataRightsPanel />
 
       <!-- 两张图：不变的 + 变化的 -->
       <div class="grid gap-4 lg:grid-cols-2">

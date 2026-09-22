@@ -21,6 +21,8 @@ import {
   type SnapshotRow,
 } from '@/storage/snapshotRepo'
 
+import { useChatStore } from './chat'
+
 export const useEvolutionStore = defineStore('evolution', () => {
   const persona = ref<PersonaProfile | null>(null)
   const snapshots = ref<SnapshotRow[]>([])
@@ -101,6 +103,42 @@ export const useEvolutionStore = defineStore('evolution', () => {
     persona.value = next
     await saveEvolving(next.id, next.evolving)
     snapshots.value = await listSnapshots(next.id)
+    // 🔴 跨 store 同步：chat store 持有同一档案的内存副本，
+    //    不同步的话下一轮对话会把旧记忆注入回去（P3 验收 R5 踩过的坑）。
+    //    当时是在组件里手动搬，这次直接在 store 里做 —— 编辑类操作都走这里。
+    const chat = useChatStore()
+    if (chat.persona && chat.persona.id === next.id) {
+      chat.persona = { ...chat.persona, evolving: next.evolving }
+    }
+  }
+
+  /**
+   * 编辑一张记忆卡的触发词（D004 的缓解措施，2026-09-22 HJ 拍板补上）。
+   *
+   * 为什么用户要能改：抽取器给的触发词是**猜测** ——
+   * 有的永远命中不了（用户换了个说法），有的太泛每轮都触发（稀释注入区）。
+   * 卡片内容是模型记的事实，不好让用户逐条改写；但触发词是**检索参数**，
+   * 用户自己最清楚「我以后会怎么说这件事」。
+   */
+  async function updateTriggers(memoryId: string, triggers: string[]) {
+    if (!persona.value) return
+    const memories = persona.value.evolving.memories.map((m) =>
+      m.id === memoryId ? { ...m, triggers } : m,
+    )
+    await persistEvolving({
+      ...persona.value,
+      evolving: { ...persona.value.evolving, memories },
+    })
+  }
+
+  /** 删除一张记忆卡 —— 记忆被污染（抽进了不该记的东西）时的处置手段 */
+  async function deleteMemory(memoryId: string) {
+    if (!persona.value) return
+    const memories = persona.value.evolving.memories.filter((m) => m.id !== memoryId)
+    await persistEvolving({
+      ...persona.value,
+      evolving: { ...persona.value.evolving, memories },
+    })
   }
 
   return {
@@ -115,5 +153,7 @@ export const useEvolutionStore = defineStore('evolution', () => {
     load,
     rollback,
     persistEvolving,
+    updateTriggers,
+    deleteMemory,
   }
 })

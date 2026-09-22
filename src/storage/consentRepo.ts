@@ -41,3 +41,18 @@ export async function grantConsent(scope: ConsentScope): Promise<void> {
     revokedAt: null,
   })
 }
+
+/**
+ * 撤回同意（R8「撤回同意入口」的落库侧）。
+ * 置 revokedAt 而不是删行 —— 保留「曾经同意过、何时撤回」的历史；
+ * `hasValidConsent` 见到 revokedAt 就视为失效，下次投料重新弹窗。
+ */
+export async function revokeConsent(scope: ConsentScope): Promise<void> {
+  const rows = await db.consents.where('scope').equals(scope).toArray()
+  const now = new Date().toISOString()
+  for (const r of rows) {
+    if (!r.revokedAt && r.version === CONSENT_VERSION) {
+      await db.consents.update(r.id as number, { revokedAt: now })
+    }
+  }
+}

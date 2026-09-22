@@ -132,6 +132,37 @@ export async function deletePersona(id: string): Promise<void> {
   await db.personas.delete(id)
 }
 
+/**
+ * 「删除我的全部数据」（R8）—— 清空所有表，一个不留。
+ *
+ * 这是数据主权的兜底键：人格、会话、消息、快照、同意记录全部消失。
+ * ⚠️ **故意不重新播种** —— 调用方（DataRightsPanel）负责刷新页面，
+ * 应用启动时的 `seedIfEmpty` 会自然写回内置人格。
+ * 「删了又自己冒出来」只对**内置人格**成立且只发生一次，
+ * 用户已通过确认弹窗知情；其他任何数据都不会复活。
+ *
+ * 调用方负责先弹确认框 —— 这里不做任何确认。
+ */
+export async function deleteAllData(): Promise<void> {
+  await db.transaction(
+    'rw',
+    db.personas,
+    db.conversations,
+    db.messages,
+    db.snapshots,
+    db.consents,
+    async () => {
+      await Promise.all([
+        db.personas.clear(),
+        db.conversations.clear(),
+        db.messages.clear(),
+        db.snapshots.clear(),
+        db.consents.clear(),
+      ])
+    },
+  )
+}
+
 export async function countPersonas(): Promise<number> {
   return db.personas.count()
 }
