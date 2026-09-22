@@ -21,6 +21,7 @@ const NAV = [
   { to: '/', label: '对话' },
   { to: '/feed', label: '投料' },
   { to: '/persona', label: '档案' },
+  { to: '/settings', label: '设置' },
   { to: '/about', label: '关于' },
 ] as const
 

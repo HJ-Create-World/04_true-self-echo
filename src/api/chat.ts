@@ -21,6 +21,8 @@ export const SAMPLING = {
  */
 export const THINKING_OFF = { type: 'disabled' } as const
 
+import { overrideFor } from './apiConfig.ts'
+
 export interface ChatRequest {
   provider: string
   system: string
@@ -43,7 +45,6 @@ export interface ChatRequest {
    */
   responseFormat?: 'json'
 }
-
 export interface ChatUsage {
   prompt: number
   completion: number
@@ -79,10 +80,15 @@ export class ChatError extends Error {
 }
 
 export async function sendChat(req: ChatRequest, signal?: AbortSignal): Promise<ChatResponse> {
+  // 前端配置的覆盖项（若该 provider 有配置）随请求带给本机后端 ——
+  // 后端内存转发、不落盘；不配置时字段缺省，行为与 .env 模式完全一致
+  const override = overrideFor(req.provider)
+  const payload = override ? { ...req, override } : req
+
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
+    body: JSON.stringify(payload),
     signal,
   })
 

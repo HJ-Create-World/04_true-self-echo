@@ -9,6 +9,7 @@
  */
 
 import { createServer } from 'node:http'
+import { networkInterfaces } from 'node:os'
 
 import { listProviders, resolveDefaultProvider, getProvider } from '../src/api/provider.ts'
 import { SAMPLING, THINKING_OFF } from '../src/api/chat.ts'
@@ -108,7 +109,20 @@ async function handleChat(req, res) {
     return sendJSON(res, 400, { error: 'userInput 不能为空' })
   }
 
-  const cfg = provider ? getProvider(provider, ENV) : resolveDefaultProvider(ENV)
+  // 前端配置的覆盖项（路线二 · 2026-09-22）：请求携带 > .env，字段级合成。
+  // 🔴 密钥只在本机内存转发、用完即弃 —— 不写日志、不落盘、不回显。
+  //    设置页存在浏览器 localStorage，数据主权在用户自己设备上。
+  const base = provider ? getProvider(provider, ENV) : resolveDefaultProvider(ENV)
+  const o = body.override ?? {}
+  const cfg = {
+    ...base,
+    apiKey: typeof o.apiKey === 'string' && o.apiKey.trim() ? o.apiKey.trim() : base.apiKey,
+    model: typeof o.model === 'string' && o.model.trim() ? o.model.trim() : base.model,
+    baseURL:
+      typeof o.baseUrl === 'string' && o.baseUrl.trim()
+        ? o.baseUrl.trim().replace(/\/+$/, '')
+        : base.baseURL,
+  }
   const messages = [{ role: 'system', content: system ?? '' }, ...history, {
     role: 'user',
     content: userInput,
@@ -204,9 +218,20 @@ const server = createServer(async (req, res) => {
   }
 })
 
-server.listen(PORT, '127.0.0.1', () => {
+// 🔴 2026-09-22：127.0.0.1 → 0.0.0.0 —— 手机/平板要在局域网里访问本机服务。
+// ⚠️ 仅限可信内网（家庭/办公室）：局域网内任何人都能用这个后端转发请求；
+//    不要把端口暴露到公网。HTTP 明文 —— 前端配置的 key 在内网传输同理。
+server.listen(PORT, '0.0.0.0', () => {
   const list = listProviders(ENV)
   console.log(`真我回响 · 薄后端已就绪 http://127.0.0.1:${PORT}`)
+  const nets = networkInterfaces()
+  for (const [name, addrs] of Object.entries(nets)) {
+    for (const a of addrs ?? []) {
+      if (a.family === 'IPv4' && !a.internal) {
+        console.log(`  局域网访问：http://${a.address}:${PORT}（网卡 ${name}）—— 手机同 WiFi 可用`)
+      }
+    }
+  }
   console.log(
     list.length
       ? `可用后端：${list.map((p) => `${p.name}(${p.model})${p.isDefault ? '*' : ''}`).join('  ')}`
