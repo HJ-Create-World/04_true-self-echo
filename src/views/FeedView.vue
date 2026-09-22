@@ -9,6 +9,7 @@
 import { computed, onMounted } from 'vue'
 
 import CleanPanel from '@/components/feed/CleanPanel.vue'
+import CorpusPanel from '@/components/feed/CorpusPanel.vue'
 import ExtractPanel from '@/components/feed/ExtractPanel.vue'
 import MaterialInput from '@/components/feed/MaterialInput.vue'
 import RealGatePanel from '@/components/feed/RealGatePanel.vue'
@@ -42,7 +43,10 @@ const removedChars = computed(() => feed.rawChars - feed.cleanChars)
     <main class="flex-1 space-y-4 overflow-y-auto pb-4">
       <MaterialInput />
 
-      <template v-if="feed.rawChars > 0">
+      <!-- JSONL 语料预处理工作台（载入语料后显示，拼装完成前主流程隐藏） -->
+      <CorpusPanel v-if="feed.corpusMode" />
+
+      <template v-if="feed.rawChars > 0 && !feed.corpusMode">
         <!-- 真人素材的同意关卡（R5）：没过这关，提取按钮是死的 -->
         <RealGatePanel v-if="feed.kind === 'real'" />
         <SourcePicker />

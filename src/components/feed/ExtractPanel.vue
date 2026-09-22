@@ -13,6 +13,7 @@ import { useRouter } from 'vue-router'
 import DraftEditor from '@/components/feed/DraftEditor.vue'
 import CloudTransferGuard from '@/components/feed/CloudTransferGuard.vue'
 import { isLocalProvider } from '@/api/provider'
+import { detectMultiSpeaker } from '@/feed/analyze'
 import { MODES, useFeedStore } from '@/feed/store'
 import { useRealGate } from '@/feed/realGate'
 import { checkCompleteness, checkSoftWarnings } from '@/persona/schema'
@@ -22,6 +23,11 @@ const feed = useFeedStore()
 const chat = useChatStore()
 const router = useRouter()
 const gate = useRealGate()
+
+/** 素材级多说话人提示（与 MaterialInput 自检清单同一数据源） */
+const multiSpeaker = computed(() =>
+  feed.raw.length && feed.protagonist === '' ? detectMultiSpeaker(feed.raw) : null,
+)
 
 /**
  * 用哪个后端跑提取。
@@ -142,6 +148,25 @@ const BTN_GHOST =
           {{ m.hint }}
         </span>
       </button>
+    </div>
+
+    <!-- 主角名（B 切片 · 多角色素材的提取约束） -->
+    <div v-if="!feed.draft && !feed.extracting" class="mb-4">
+      <label class="flex flex-wrap items-center gap-2 text-xs tracking-wide text-[#3a3a3a]/60">
+        目标角色（多角色素材建议填写）
+        <input
+          v-model="feed.protagonist"
+          placeholder="例：布洛妮娅 —— 只提取 TA 的人格"
+          class="min-w-40 flex-1 rounded-xl bg-white/60 px-3 py-1.5 font-serif text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+        />
+      </label>
+      <p
+        v-if="multiSpeaker?.multi && !feed.protagonist"
+        class="mb-0 mt-2 text-xs leading-relaxed tracking-wide text-[#d4a373]"
+      >
+        ⚠️ 素材检测到多个说话人（{{ multiSpeaker.speakers.join(' / ') }}）——
+        不填目标角色的话，提取可能把几个角色缝成一个人格
+      </p>
     </div>
 
     <!-- 未提取 -->

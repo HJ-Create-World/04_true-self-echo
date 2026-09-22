@@ -283,13 +283,14 @@ export async function runExtraction(
   material: string,
   provider: string,
   signal?: AbortSignal,
+  protagonist?: string,
 ): Promise<ExtractionRun> {
   const res = await sendChat(
     {
       provider,
       system: EXTRACTION_SYSTEM,
       history: [],
-      userInput: buildExtractionInput(material),
+      userInput: buildExtractionInput(material, protagonist),
       temperature: EXTRACT_TEMPERATURE,
       maxTokens: EXTRACT_MAX_TOKENS,
       responseFormat: 'json',

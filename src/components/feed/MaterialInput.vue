@@ -1,13 +1,19 @@
 <script setup lang="ts">
 /**
- * 素材输入 —— 粘贴 / 读本地文本文件 + 投料量档位。
+ * 素材输入 —— 粘贴 / 读本地文本文件 / JSONL 语料文件 + 投料量档位。
  *
  * ⚠️ 文件用 FileReader 在**浏览器里**读，不经过薄后端、不上传。
  * 投料素材可能含他人隐私，这一步的网络请求数必须是 0。
+ *
+ * 2026-09-22 扩展：
+ * - JSONL 语料入口（.jsonl/.json）→ 走 CorpusPanel 预处理工作台
+ * - 素材自检清单：字数档 + 情绪极端段 + 第二层 + 多角色提示
+ *   （Phase 0/2 的实测结论驱动 —— 没有极端段的素材只能提到表层风格）
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
-import { TEXT_EXT, useFeedStore } from '@/feed/store'
+import { detectEmotionalPeaks, detectMultiSpeaker } from '@/feed/analyze'
+import { CORPUS_EXT, TEXT_EXT, useFeedStore } from '@/feed/store'
 
 const feed = useFeedStore()
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -15,7 +21,14 @@ const fileInput = ref<HTMLInputElement | null>(null)
 async function onPick(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  if (file) await feed.loadFile(file)
+  if (file) {
+    const lower = file.name.toLowerCase()
+    if (CORPUS_EXT.some((e) => lower.endsWith(e))) {
+      feed.loadCorpusFile(await file.text())
+    } else {
+      await feed.loadFile(file)
+    }
+  }
   // 清空 input，否则同一个文件选第二次不触发 change
   input.value = ''
 }
@@ -35,6 +48,29 @@ const KINDS = [
   { key: 'virtual', label: '虚拟角色', hint: '动漫 / 游戏 / 小说 / 原创' },
   { key: 'real', label: '真人素材', hint: '朋友 / 亲人 —— 需走同意流程' },
 ] as const
+
+/* ---------- 素材自检清单（提示性质，逐项来自实测结论） ---------- */
+const peaks = computed(() => detectEmotionalPeaks(feed.raw))
+const multiSpeaker = computed(() => (feed.rawChars > 0 ? detectMultiSpeaker(feed.raw) : null))
+const checklist = computed(() => [
+  {
+    ok: feed.cleanChars >= 400,
+    text: `素材量 ${feed.cleanChars} 字 —— ${feed.tierInfo.label}`,
+  },
+  {
+    ok: peaks.value.hits >= 2,
+    text:
+      peaks.value.hits >= 2
+        ? `检测到 ${peaks.value.hits} 行情绪极端信号 —— 能提取到内在反差`
+        : '没检测到情绪极端段（冲突 / 告别 / 拒绝）—— 只能提到表层语言风格',
+  },
+  {
+    ok: feed.layer.hasSecondLayer,
+    text: feed.layer.hasSecondLayer
+      ? '检测到第二层（语言之外的描写）'
+      : '只有对白 —— 「嘴上说 X 身体做 Y」的信息拿不到',
+  },
+])
 </script>
 
 <template>
@@ -53,7 +89,7 @@ const KINDS = [
           读取文件
         </button>
         <button
-          v-if="feed.rawChars > 0"
+          v-if="feed.rawChars > 0 || feed.corpusMode"
           type="button"
           class="rounded-full bg-white/60 px-3 py-1 text-[#3a3a3a]/65 transition-all duration-500 ease-in-out hover:bg-[#e8a87c]/10 hover:text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98]"
           @click="feed.reset()"
@@ -67,9 +103,45 @@ const KINDS = [
       ref="fileInput"
       type="file"
       class="hidden"
-      :accept="TEXT_EXT.join(',')"
+      :accept="[...TEXT_EXT, ...CORPUS_EXT].join(',')"
       @change="onPick"
     />
+
+    <!-- 语料模式状态条 -->
+    <div
+      v-if="feed.corpusMode"
+      class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#4a6fa5]/8 px-4 py-2.5"
+    >
+      <p class="m-0 text-xs tracking-wide text-[#3a3a3a]/65">
+        📦 已载入 JSONL 语料（{{ feed.corpusText.split('\n').filter((l) => l.trim()).length }} 行）——
+        在下方工作台选角色、拼素材
+      </p>
+      <button
+        type="button"
+        class="rounded-full bg-white/70 px-3 py-1 text-xs tracking-wide text-[#3a3a3a]/60 hover:bg-white"
+        @click="feed.resetCorpus()"
+      >
+        放弃语料
+      </button>
+    </div>
+
+    <!-- 来自语料的素材状态条 -->
+    <div
+      v-if="!feed.corpusMode && feed.protagonist && feed.rawChars > 0"
+      class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#85cdca]/10 px-4 py-2.5"
+    >
+      <p class="m-0 text-xs tracking-wide text-[#3a3a3a]/65">
+        🎯 当前素材来自语料拼装 · 目标角色
+        <span class="text-[#3a3a3a]">{{ feed.protagonist }}</span> —— 提取时将只提取 TA 的人格
+      </p>
+      <button
+        type="button"
+        class="rounded-full bg-white/70 px-3 py-1 text-xs tracking-wide text-[#3a3a3a]/60 hover:bg-white"
+        @click="feed.corpusMode = true"
+      >
+        重新调整
+      </button>
+    </div>
 
     <div class="mb-3 flex flex-wrap items-center gap-2">
       <button
@@ -92,9 +164,10 @@ const KINDS = [
     </div>
 
     <textarea
+      v-if="!feed.corpusMode"
       :value="feed.raw"
       rows="12"
-      placeholder="把素材粘贴到这里 —— 整段复制，不用整理。&#10;（也可以点右上「读取文件」，支持 .txt / .md）"
+      placeholder="把素材粘贴到这里 —— 整段复制，不用整理。&#10;（也可以点右上「读取文件」，支持 .txt / .md / .jsonl 语料）"
       class="w-full resize-y rounded-2xl bg-white/60 px-5 py-4 font-serif text-sm leading-relaxed tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 transition-all duration-500 ease-in-out focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
       @input="feed.raw = ($event.target as HTMLTextAreaElement).value"
     />
@@ -106,15 +179,33 @@ const KINDS = [
       {{ feed.fileError }}
     </p>
 
-    <details class="mt-4 text-xs leading-relaxed tracking-wide text-[#3a3a3a]/55">
-      <summary class="cursor-pointer transition-all duration-500 ease-in-out hover:text-[#3a3a3a]">
-        什么样的素材能提取出好东西？
+    <!-- 素材自检清单（有素材时显示） -->
+    <details v-if="feed.rawChars > 0" class="mt-4" open>
+      <summary class="cursor-pointer text-xs tracking-wide text-[#3a3a3a]/55 transition-all duration-500 ease-in-out hover:text-[#3a3a3a]">
+        素材自检（{{ checklist.filter((c) => c.ok).length }}/{{ checklist.length }} 项达标）
       </summary>
       <ul class="mt-2 mb-0 list-none space-y-1 p-0">
-        <li>· 不少于 3 段这个人说的话，其中<span class="text-[#e8a87c]">至少 1 段是情绪极端时</span>（生气 / 难过 / 告别 / 拒绝）</li>
-        <li>· 实测：400 字只能拿到语言风格；1800 字（含冲突 + 离别）才能提取到内在矛盾</li>
-        <li>· 小说原文、剧本 &gt; 纯台词 —— 因为「她嘴上说 X，但身体做了 Y」才是深层人格的关键</li>
-        <li>· 不要投别人已经写好的「角色分析」—— 提取器会直接抄那份分析的结论</li>
+        <li
+          v-for="c in checklist"
+          :key="c.text"
+          class="rounded-xl bg-white/50 px-3 py-1.5 text-xs leading-relaxed tracking-wide"
+          :class="c.ok ? 'text-[#3a3a3a]/65' : 'text-[#d4a373]'"
+        >
+          {{ c.ok ? '✅' : '⚠️' }} {{ c.text }}
+        </li>
+        <li
+          v-if="multiSpeaker?.multi && !feed.protagonist"
+          class="rounded-xl bg-[#d4a373]/12 px-3 py-1.5 text-xs leading-relaxed tracking-wide text-[#d4a373]"
+        >
+          ⚠️ 检测到多个说话人（{{ multiSpeaker.speakers.join(' / ') }}……）——
+          在下方「提取」面板填<b>主角名</b>，否则可能提取出缝合人格
+        </li>
+        <li
+          v-else-if="feed.protagonist"
+          class="rounded-xl bg-white/50 px-3 py-1.5 text-xs leading-relaxed tracking-wide text-[#3a3a3a]/65"
+        >
+          ✅ 目标角色：{{ feed.protagonist }} —— 其他角色台词只作上下文
+        </li>
       </ul>
     </details>
   </section>

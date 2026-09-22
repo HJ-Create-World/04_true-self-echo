@@ -94,9 +94,19 @@ ${OUTPUT_SCHEMA}
  *
  * ⚠️ 素材**原样传入**，不做截断 —— 截断会让 evidence 栏的逐字原文对不上。
  * 长度上限由调用方（`feed/extract.ts`）按上下文窗口把关。
+ *
+ * 多角色约束（2026-09-22，HJ 拍板）：素材是多角色文本（小说/剧情/语料拼装）时，
+ * 用户指定目标角色 —— 其他角色的台词**只是上下文**（帮她回应得像），
+ * 任何字段都不得从他们的言行中提取。没有目标角色就维持原样（单角色素材是主流）。
  */
-export function buildExtractionInput(material: string): string {
-  return `素材：
+export function buildExtractionInput(material: string, protagonist?: string): string {
+  const head = protagonist?.trim()
+    ? `⚠️ 目标角色：${protagonist.trim()}\n` +
+      '这份素材可能包含多个人物。**只提取目标角色的人格** —— 其他角色的台词' +
+      '只是上下文，用来理解目标角色如何回应，绝不从他们的言行中提取任何字段。\n\n素材：'
+    : '素材：'
+
+  return `${head}
 
 <素材>
 ${material}

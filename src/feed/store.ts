@@ -12,6 +12,7 @@ import { emptyEvolving } from '@/persona/evolving'
 import { emptySource, type PersonaProfile, type SourceNote } from '@/persona/schema'
 import { putPersona } from '@/storage/personaRepo'
 import { analyzeLayer, countChars, detectDistilled, stripRanges } from './analyze'
+import { assembleMaterial, parseCorpus } from './corpus'
 import { runExtraction, type ExtractionDraft } from './extract'
 
 /**
@@ -56,6 +57,9 @@ export function weightTier(chars: number): { label: string; tone: 'bad' | 'ok' |
 
 /** 支持的文件类型 —— PDF/Word 需要额外解析库，Phase 2 暂缓 */
 export const TEXT_EXT = ['.txt', '.md', '.markdown', '.text']
+
+/** 结构化对话语料（每行一句、带 role 标签）→ 走 CorpusPanel 预处理 */
+export const CORPUS_EXT = ['.jsonl', '.json']
 
 /** 生成画像 id —— 投料产物不需要自增，用时间 + 随机后缀即可稳定且不撞 */
 function newId(): string {
@@ -120,6 +124,56 @@ export const useFeedStore = defineStore('feed', () => {
   /** 保存后得到的档案，用于「去和它聊」 */
   const saved = ref<PersonaProfile | null>(null)
 
+  /* ---------- JSONL 语料模式（2026-09-22，崩坏3语料库真实需求） ---------- */
+  /** true = 正在从语料拼装素材（此时 raw 为空，主流程面板隐藏） */
+  const corpusMode = ref(false)
+  const corpusText = ref('')
+  const corpusRole = ref('')
+  const corpusChapterIds = ref<number[]>([])
+  const corpusIncludeNarration = ref(false)
+  const corpusIncludeUnknown = ref(false)
+  /**
+   * 目标角色（多角色素材的提取约束，B 切片）。
+   * 语料选角色时自动填；纯文本素材可手动填；空 = 单角色素材无需约束。
+   */
+  const protagonist = ref('')
+
+  const corpusStats = computed(() => (corpusText.value ? parseCorpus(corpusText.value) : null))
+  const corpusAssembled = computed(() => {
+    if (!corpusStats.value || !corpusRole.value.trim()) return null
+    return assembleMaterial(corpusStats.value.utterances, {
+      protagonist: corpusRole.value,
+      chapterIds: corpusChapterIds.value.length ? corpusChapterIds.value : undefined,
+      includeNarration: corpusIncludeNarration.value,
+      includeUnknown: corpusIncludeUnknown.value,
+    })
+  })
+
+  function loadCorpusFile(text: string) {
+    corpusText.value = text
+    corpusRole.value = ''
+    corpusChapterIds.value = []
+    protagonist.value = ''
+    corpusMode.value = true
+  }
+
+  function resetCorpus() {
+    corpusText.value = ''
+    corpusRole.value = ''
+    corpusChapterIds.value = []
+    corpusMode.value = false
+  }
+
+  /** 拼装结果写进主流程 —— 之后走正常的标注/清洗/提取 */
+  function applyCorpusToFeed(): boolean {
+    const a = corpusAssembled.value
+    if (!a || !a.text) return false
+    raw.value = a.text
+    protagonist.value = corpusRole.value.trim()
+    corpusMode.value = false
+    return true
+  }
+
   const hits = computed(() => detectDistilled(raw.value))
   const layer = computed(() => analyzeLayer(raw.value))
 
@@ -164,6 +218,8 @@ export const useFeedStore = defineStore('feed', () => {
     extractMeta.value = ''
     extractRaw.value = ''
     saved.value = null
+    protagonist.value = ''
+    resetCorpus()
   }
 
   /** 提取：调 LLM，产出草稿。**不落库** —— 落库要用户确认过（见 save） */
@@ -176,7 +232,7 @@ export const useFeedStore = defineStore('feed', () => {
     saved.value = null
     const started = Date.now()
     try {
-      const res = await runExtraction(cleaned.value, provider)
+      const res = await runExtraction(cleaned.value, provider, undefined, protagonist.value)
       extractRaw.value = res.raw
       extractMeta.value = `${res.model} · ${((Date.now() - started) / 1000).toFixed(1)}s`
       if (res.parseError) {
@@ -254,6 +310,18 @@ export const useFeedStore = defineStore('feed', () => {
     tier,
     mode,
     kind,
+    protagonist,
+    corpusMode,
+    corpusText,
+    corpusRole,
+    corpusChapterIds,
+    corpusIncludeNarration,
+    corpusIncludeUnknown,
+    corpusStats,
+    corpusAssembled,
+    loadCorpusFile,
+    resetCorpus,
+    applyCorpusToFeed,
     marked,
     hits,
     layer,

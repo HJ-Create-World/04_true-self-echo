@@ -324,3 +324,67 @@ export function analyzeLayer(text: string): LayerReport {
 export function countChars(text: string): number {
   return text.replace(/\s/g, '').length
 }
+
+/**
+ * 多说话人粗检（2026-09-22，多角色投料需求的配套信号）。
+ *
+ * 启发式：对白常见「名字：台词」格式，收集行首 1–8 字 + 冒号的前缀，
+ * 出现 ≥3 个不同前缀且总命中 ≥3 行 → 判为多角色。
+ * **提示性质，不是判定** —— 误报无害（用户看一眼素材就知道要不要填主角名），
+ * 漏报也无害（主角名本来就可以不填）。
+ */
+export function detectMultiSpeaker(text: string): { multi: boolean; speakers: string[] } {
+  const counter = new Map<string, number>()
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(/^([^\s：:]{1,8})[：:]/)
+    if (!m) continue
+    const name = m[1]
+    // 排除明显的非人名前缀（旁白/场景标记/序号）
+    if (/^(旁白|系统|场景|舞台|第.+[章幕回]|[（(【\d])/i.test(name)) continue
+    counter.set(name, (counter.get(name) ?? 0) + 1)
+  }
+  const speakers = Array.from(counter.entries())
+    .filter(([, n]) => n >= 1)
+    .map(([name]) => name)
+  return { multi: speakers.length >= 3, speakers: speakers.slice(0, 8) }
+}
+
+/**
+ * 情绪极端段粗检（自检清单用）。
+ *
+ * Phase 0/2 的实测结论：没有情绪极端时刻（冲突/告别/拒绝）的素材只能提取到
+ * 表层语言风格 —— 这个信号帮用户在投料前意识到素材天花板。
+ * 同样是提示性质：关键词命中数只是「大概有」，不承诺「提得出来」。
+ */
+const EMOTIONAL_CUES = [
+  '滚',
+  '闭嘴',
+  '别走',
+  '不要走',
+  '对不起',
+  '抱歉',
+  '再见',
+  '讨厌',
+  '恨',
+  '救',
+  '求你',
+  '哭',
+  '死',
+  '痛',
+  '骗',
+  '背叛',
+  '放过',
+]
+
+export function detectEmotionalPeaks(text: string): { hits: number; samples: string[] } {
+  const samples: string[] = []
+  let hits = 0
+  for (const line of text.split('\n')) {
+    const t = line.trim()
+    if (t && EMOTIONAL_CUES.some((c) => t.includes(c))) {
+      hits += 1
+      if (samples.length < 3) samples.push(t.slice(0, 40))
+    }
+  }
+  return { hits, samples }
+}
