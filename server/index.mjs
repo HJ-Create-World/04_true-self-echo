@@ -112,8 +112,36 @@ async function handleChat(req, res) {
   // 前端配置的覆盖项（路线二 · 2026-09-22）：请求携带 > .env，字段级合成。
   // 🔴 密钥只在本机内存转发、用完即弃 —— 不写日志、不落盘、不回显。
   //    设置页存在浏览器 localStorage，数据主权在用户自己设备上。
-  const base = provider ? getProvider(provider, ENV) : resolveDefaultProvider(ENV)
+  //
+  // 自定义连接：override.baseUrl 存在 → **完全以请求为准**（.env 里可以没有
+  // 这个 provider，provider 名仅作标签与统计）—— 用户可以接阿里云 / OpenAI
+  // / 任何 OpenAI 兼容服务。⚠️ baseUrl 由本机用户自己填，SSRF 风险自担（单机应用）。
   const o = body.override ?? {}
+  const customBase =
+    typeof o.baseUrl === 'string' && o.baseUrl.trim()
+      ? {
+          baseURL: o.baseUrl.trim().replace(/\/+$/, ''),
+          apiKey: typeof o.apiKey === 'string' ? o.apiKey.trim() : '',
+          model: typeof o.model === 'string' && o.model.trim() ? o.model.trim() : '',
+          name: provider || 'custom',
+        }
+      : null
+  if (customBase && !customBase.model) {
+    return sendJSON(res, 400, { error: '自定义连接缺少模型名（model）' })
+  }
+
+  let base
+  if (customBase) {
+    base = customBase
+  } else {
+    try {
+      base = provider ? getProvider(provider, ENV) : resolveDefaultProvider(ENV)
+    } catch (e) {
+      return sendJSON(res, 400, { error: String(e?.message ?? e) })
+    }
+  }
+
+  // 字段级覆盖仍允许（比如只换 .env 服务的 key / 模型名）
   const cfg = {
     ...base,
     apiKey: typeof o.apiKey === 'string' && o.apiKey.trim() ? o.apiKey.trim() : base.apiKey,

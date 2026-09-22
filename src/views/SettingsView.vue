@@ -14,11 +14,18 @@ import { onMounted, ref } from 'vue'
 import { fetchProviders, type ChatRequest } from '@/api/chat'
 import type { ProviderInfo } from '@/api/provider'
 import {
+  deleteConnection,
   hasOverride,
+  listCustomConnections,
   loadApiConfig,
   saveApiConfig,
+  saveCustomConnection,
   type ApiConfigMap,
+  type CustomConnection,
 } from '@/api/apiConfig'
+import { useChatStore } from '@/stores/chat'
+
+const chat = useChatStore()
 
 const providers = ref<ProviderInfo[]>([])
 const loaded = ref(false)
@@ -26,6 +33,61 @@ const loaded = ref(false)
 /** 每行可编辑的草稿（空字符串 = 不覆盖） */
 const drafts = ref<Record<string, { model: string; apiKey: string; baseUrl: string }>>({})
 const notice = ref<string | null>(null)
+
+/* ---------- 自定义连接（增删改） ---------- */
+const customs = ref<CustomConnection[]>([])
+/** null = 收起；'' = 新增；非空 = 编辑该名称（名称即主键） */
+const editingName = ref<string | null>(null)
+const customDraft = ref<CustomConnection>({ name: '', baseUrl: '', model: '', apiKey: '' })
+
+function refreshCustoms() {
+  customs.value = listCustomConnections()
+}
+
+function startAddCustom() {
+  editingName.value = ''
+  customDraft.value = { name: '', baseUrl: '', model: '', apiKey: '' }
+}
+
+function startEditCustom(c: CustomConnection) {
+  editingName.value = c.name
+  customDraft.value = { ...c }
+}
+
+function cancelCustom() {
+  editingName.value = null
+}
+
+function saveNewCustom() {
+  const d = customDraft.value
+  if (!d.name.trim() || !d.baseUrl.trim() || !d.model.trim()) {
+    notice.value = '名称、接口地址、模型名都要填'
+    return
+  }
+  const isNew = editingName.value === ''
+  if (isNew && (providers.value.some((p) => p.name === d.name.trim()) || customs.value.some((c) => c.name === d.name.trim()))) {
+    notice.value = `「${d.name.trim()}」已经存在`
+    return
+  }
+  saveCustomConnection({
+    name: d.name.trim(),
+    baseUrl: d.baseUrl.trim(),
+    model: d.model.trim(),
+    apiKey: d.apiKey?.trim() || undefined,
+  })
+  refreshCustoms()
+  chat.reloadProviders()
+  notice.value = `已保存自定义连接「${d.name.trim()}」—— 对话页下拉里现在可以选它`
+  editingName.value = null
+}
+
+function removeCustom(name: string) {
+  if (!confirm(`删除自定义连接「${name}」？正在使用它的人格会回落到默认模型。`)) return
+  deleteConnection(name)
+  refreshCustoms()
+  chat.reloadProviders()
+  notice.value = `已删除「${name}」`
+}
 
 onMounted(async () => {
   try {
@@ -40,6 +102,7 @@ onMounted(async () => {
     draftsObj[p.name] = { model: o.model ?? '', apiKey: '', baseUrl: o.baseUrl ?? '' }
   }
   drafts.value = draftsObj
+  refreshCustoms()
   loaded.value = true
 })
 
@@ -193,6 +256,106 @@ function buildOverride(name: string, model: string): Record<string, string> {
         <p v-else class="m-0 text-xs tracking-wide text-[#3a3a3a]/40">
           读取后端清单失败 —— 先启动后端（npm run server）再进这页。
         </p>
+
+        <!-- 自定义连接：.env 之外，用户自己接的任何 OpenAI 兼容服务 -->
+        <div class="mt-6 border-t border-[#4a6fa5]/12 pt-5">
+          <header class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 class="m-0 text-sm tracking-wide text-[#3a3a3a]">自定义连接</h3>
+              <p class="mb-0 mt-1 text-xs leading-relaxed tracking-wide text-[#3a3a3a]/50">
+                接任何 OpenAI 兼容服务（阿里云百炼 / OpenAI / 硅基流动 / 本地推理……）。
+                配好后会出现在对话页的模型下拉里。
+              </p>
+            </div>
+            <button
+              v-if="editingName === null"
+              type="button"
+              class="rounded-full bg-[#e8a87c]/14 px-4 py-1.5 text-xs tracking-wide text-[#3a3a3a]/75 transition-all duration-500 ease-in-out hover:bg-[#e8a87c]/25 active:scale-[0.98]"
+              @click="startAddCustom"
+            >
+              + 新增连接
+            </button>
+          </header>
+
+          <!-- 已有连接列表 -->
+          <ul v-if="customs.length" class="m-0 list-none space-y-1.5 p-0">
+            <li
+              v-for="c in customs"
+              :key="c.name"
+              class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-[#4a6fa5]/12 bg-white/45 px-4 py-2"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="m-0 truncate text-xs tracking-wide text-[#3a3a3a]">
+                  {{ c.name }} <span class="text-[#3a3a3a]/45">· {{ c.model }}</span>
+                  <span v-if="!c.apiKey" class="text-[#85cdca]">· 本地</span>
+                </p>
+                <p class="mb-0 mt-0.5 truncate text-xs text-[#3a3a3a]/40">{{ c.baseUrl }}</p>
+              </div>
+              <button
+                type="button"
+                class="rounded-full bg-white/70 px-3 py-1 text-xs tracking-wide text-[#3a3a3a]/60 hover:bg-white"
+                @click="startEditCustom(c)"
+              >
+                编辑
+              </button>
+              <button
+                type="button"
+                class="rounded-full bg-white/60 px-3 py-1 text-xs tracking-wide text-[#3a3a3a]/45 transition-all duration-500 ease-in-out hover:bg-[#c38d94]/12 hover:text-[#c38d94] active:scale-[0.98]"
+                @click="removeCustom(c.name)"
+              >
+                删除
+              </button>
+            </li>
+          </ul>
+          <p v-else-if="editingName === null" class="m-0 text-xs tracking-wide text-[#3a3a3a]/40">
+            还没有自定义连接 —— 上面三个是 .env 里配置的。
+          </p>
+
+          <!-- 新增 / 编辑表单 -->
+          <div v-if="editingName !== null" class="mt-3 rounded-2xl bg-white/60 p-4">
+            <div class="grid gap-2 md:grid-cols-2">
+              <input
+                v-model="customDraft.name"
+                :placeholder="editingName === '' ? '名称（如：阿里云百炼）' : customDraft.name"
+                :disabled="editingName !== ''"
+                class="rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 disabled:opacity-50"
+              />
+              <input
+                v-model="customDraft.model"
+                placeholder="模型名（如：qwen-max / gpt-4o-mini）"
+                class="rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+              />
+              <input
+                v-model="customDraft.baseUrl"
+                placeholder="接口地址（到 /v1 为止，如 https://dashscope.aliyuncs.com/compatible-mode/v1）"
+                class="rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 md:col-span-2"
+              />
+              <input
+                v-model="customDraft.apiKey"
+                type="password"
+                placeholder="API Key（本地推理服务可留空）"
+                autocomplete="off"
+                class="rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 md:col-span-2"
+              />
+            </div>
+            <div class="mt-3 flex gap-2">
+              <button
+                type="button"
+                class="rounded-full bg-[#4a6fa5] px-4 py-1.5 text-xs tracking-wide text-white transition-all duration-500 ease-in-out hover:opacity-90 active:scale-[0.98]"
+                @click="saveNewCustom"
+              >
+                {{ editingName === '' ? '添加' : '保存修改' }}
+              </button>
+              <button
+                type="button"
+                class="rounded-full bg-white/60 px-4 py-1.5 text-xs tracking-wide text-[#3a3a3a]/55 hover:bg-white/85"
+                @click="cancelCustom"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
 
         <p
           v-if="notice"

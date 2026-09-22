@@ -9,6 +9,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { sendChat, fetchProviders, ChatError } from '@/api/chat'
+import { listCustomConnections } from '@/api/apiConfig'
 import type { SystemPromptParts, TurnMessage } from '@/core/prompt'
 import { buildMessages, trimHistory } from '@/core/prompt'
 import { renderMemoryBlock } from '@/memory/inject'
@@ -86,6 +87,32 @@ export const useChatStore = defineStore('chat', () => {
   /** 供 UI 显示「上一轮用了什么模型、多快」 */
   const statusLine = computed(() => lastMeta.value)
 
+  /**
+   * 重建模型下拉：.env 服务（/api/providers）+ 前端自定义连接。
+   * 🔴 必须**重建**而不是在旧列表上叠加 —— 否则删除自定义连接后
+   * 旧条目会残留在下拉里（custom_provider_e2e C4 抓的）。
+   * 当前选中的连接被删除时自动回退到默认。
+   */
+  async function reloadProviders() {
+    try {
+      providers.value = await fetchProviders()
+    } catch {
+      /* 拉不到 .env 清单就保留现状，至少自定义连接还在 */
+    }
+    const customs = listCustomConnections().map((c) => ({
+      name: c.name,
+      model: c.model,
+      isDefault: false,
+    }))
+    providers.value = [
+      ...providers.value.filter((p) => !customs.some((c) => c.name === p.name)),
+      ...customs,
+    ]
+    if (currentProvider.value && !providers.value.some((p) => p.name === currentProvider.value)) {
+      currentProvider.value = providers.value.find((p) => p.isDefault)?.name ?? providers.value[0]?.name ?? ''
+    }
+  }
+
   async function init() {
     if (!initialized.value) {
       try {
@@ -96,6 +123,7 @@ export const useChatStore = defineStore('chat', () => {
         providers.value = []
         error.value = '连不上薄后端，请先运行 npm run server'
       }
+      await reloadProviders()
 
       // 首次进应用：用最近更新过的那份档案兜底；空库时写入内置人格。
       // 之后的显式切换只能走 switchTo() —— 这是 Phase 4 定下的规则。
@@ -335,6 +363,7 @@ function fmtTokens(n: number): string {
     init,
     send,
     reset,
+    reloadProviders,
     usePersona,
     switchTo,
     refreshPersonaList,

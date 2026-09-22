@@ -106,6 +106,16 @@ async function reset() {
         >
           AI 生成 · 非真人
         </span>
+        <!-- 模型切换（含自定义连接）：聊着聊着换模型是真实需求 -->
+        <select
+          v-model="chat.currentProvider"
+          class="max-w-[9rem] shrink-0 truncate rounded-xl bg-white/60 px-2 py-1 text-xs tracking-wide text-[#3a3a3a]/75 transition-all duration-500 ease-in-out focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+          aria-label="切换模型服务"
+        >
+          <option v-for="p in chat.providers" :key="p.name" :value="p.name">
+            {{ p.name }} · {{ p.model }}
+          </option>
+        </select>
       </div>
       <button
         type="button"

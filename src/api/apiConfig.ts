@@ -24,6 +24,13 @@ export interface ApiOverride {
   apiKey?: string
   model?: string
   baseUrl?: string
+  /**
+   * 纯前端定义的连接（2026-09-22）：.env 里**没有**这个 provider，
+   * baseUrl + model 必填（apiKey 可空 = 本地服务）。后端见到
+   * override.baseUrl 就完全以请求为准，provider 名仅作标签与统计。
+   * 无此标志 = 给 .env 里已有的 provider 做字段级覆盖（两者可并存）。
+   */
+  custom?: boolean
 }
 
 /** provider 名 → 覆盖项。只存有内容的字段 */
@@ -59,10 +66,46 @@ export function overrideFor(provider: string): ApiOverride | undefined {
   if (o.apiKey?.trim()) clean.apiKey = o.apiKey.trim()
   if (o.model?.trim()) clean.model = o.model.trim()
   if (o.baseUrl?.trim()) clean.baseUrl = o.baseUrl.trim()
+  if (o.custom) clean.custom = true
   return Object.keys(clean).length ? clean : undefined
 }
 
 /** 判断某个 provider 是否有前端配置（设置页展示「已配置」用） */
 export function hasOverride(provider: string): boolean {
   return overrideFor(provider) !== undefined
+}
+
+/* ---------- 自定义连接（增删改 · 2026-09-22） ---------- */
+
+export interface CustomConnection {
+  name: string
+  baseUrl: string
+  model: string
+  apiKey?: string
+}
+
+/** 用户自己加的连接清单（不含 .env 覆盖项） */
+export function listCustomConnections(): CustomConnection[] {
+  const map = loadApiConfig()
+  return Object.entries(map)
+    .filter(([, o]) => o.custom && o.baseUrl?.trim() && o.model?.trim())
+    .map(([name, o]) => ({
+      name,
+      baseUrl: o.baseUrl!.trim(),
+      model: o.model!.trim(),
+      apiKey: o.apiKey?.trim() || undefined,
+    }))
+}
+
+/** 新增 / 更新一个自定义连接。写完调用方应广播 material-changed 同款事件 */
+export function saveCustomConnection(c: CustomConnection): void {
+  const map = loadApiConfig()
+  map[c.name] = { custom: true, baseUrl: c.baseUrl, model: c.model, ...(c.apiKey ? { apiKey: c.apiKey } : {}) }
+  saveApiConfig(map)
+}
+
+export function deleteConnection(name: string): void {
+  const map = loadApiConfig()
+  delete map[name]
+  saveApiConfig(map)
 }

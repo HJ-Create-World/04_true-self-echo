@@ -106,15 +106,20 @@ const label = () => MOODS.find((m) => m.key === current.value)?.label ?? '庭院
   <div ref="root" class="relative flex items-center" role="radiogroup" aria-labelledby="mood-label">
     <span id="mood-label" class="sr-only">选择情绪色域</span>
 
-    <!-- 顶栏唯一入口：当前主题名 -->
+    <!-- 顶栏唯一入口：当前主题名。图标 = 四色圆点（对应四个主题的象征色），不用 emoji -->
     <button
       type="button"
-      class="flex items-center gap-1.5 rounded-full bg-white/60 px-4 py-1.5 text-sm tracking-wide text-[#3a3a3a]/75 transition-all duration-500 ease-in-out hover:bg-[#e8a87c]/10 hover:text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98]"
+      class="flex items-center gap-2 rounded-full bg-white/60 px-4 py-1.5 text-sm tracking-wide text-[#3a3a3a]/75 transition-all duration-500 ease-in-out hover:bg-[#e8a87c]/10 hover:text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98]"
       :aria-expanded="open"
       aria-haspopup="true"
       @click.stop="open = !open"
     >
-      <span class="text-xs">🎨</span>
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+        <circle cx="4.5" cy="4.5" r="3" fill="#e8a87c" fill-opacity="0.85" />
+        <circle cx="9.5" cy="4.5" r="3" fill="#85cdca" fill-opacity="0.85" />
+        <circle cx="4.5" cy="9.5" r="3" fill="#d4a373" fill-opacity="0.85" />
+        <circle cx="9.5" cy="9.5" r="3" fill="#c38d94" fill-opacity="0.85" />
+      </svg>
       {{ label() }}
     </button>
 
