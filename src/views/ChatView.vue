@@ -80,8 +80,8 @@ async function reset() {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <div class="flex items-center justify-between gap-4 pb-4">
-      <div class="flex min-w-0 items-center gap-2">
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-4">
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
         <p class="m-0 shrink-0 text-sm tracking-wide text-[#3a3a3a]/55">与</p>
         <select
           :value="chat.persona.id"
@@ -109,7 +109,7 @@ async function reset() {
         <!-- 模型切换（含自定义连接）：聊着聊着换模型是真实需求 -->
         <select
           v-model="chat.currentProvider"
-          class="max-w-[9rem] shrink-0 truncate rounded-xl bg-white/60 px-2 py-1 text-xs tracking-wide text-[#3a3a3a]/75 transition-all duration-500 ease-in-out focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+          class="max-w-[7rem] shrink-0 truncate rounded-xl bg-white/60 px-2 py-1 text-xs tracking-wide text-[#3a3a3a]/75 transition-all duration-500 ease-in-out focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 sm:max-w-[9rem]"
           aria-label="切换模型服务"
         >
           <option v-for="p in chat.providers" :key="p.name" :value="p.name">
