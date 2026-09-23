@@ -34,6 +34,7 @@
       "dist/**"
     ],
     "win": {
+      "icon": "build-assets/icon.ico",
       "target": [
         "nsis",
         "portable"
@@ -50,12 +51,16 @@
     }
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "dexie": "^4.0.11",
     "pinia": "^3.0.3",
     "vue": "^3.5.22",
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.2",
     "@tailwindcss/vite": "^4.1.16",
     "@types/node": "^22.18.8",
     "@vitejs/plugin-vue": "^6.0.1",
@@ -63,6 +68,8 @@
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "playwright": "^1.63.0",
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.1.16",
     "typescript": "~5.9.3",
     "vite": "^7.1.15",

@@ -9,6 +9,13 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { sendChat, fetchProviders, ChatError } from '@/api/chat'
+import { Capacitor } from '@capacitor/core'
+
+/** APK/桌面原生环境判定（直连模式开关） */
+function isNative(): boolean {
+  return Capacitor.isNativePlatform()
+}
+
 import { getSelectedModel, listCustomConnections, loadApiConfig } from '@/api/apiConfig'
 import type { SystemPromptParts, TurnMessage } from '@/core/prompt'
 import { buildMessages, trimHistory } from '@/core/prompt'
@@ -143,12 +150,14 @@ export const useChatStore = defineStore('chat', () => {
 
   async function init() {
     if (!initialized.value) {
-      try {
-        providers.value = await fetchProviders()
-      } catch {
-        providers.value = []
-        error.value = '连不上薄后端，请先运行 npm run server'
+      if (!isNative()) {        try {
+          providers.value = await fetchProviders()
+        } catch {
+          providers.value = []
+          error.value = '连不上薄后端，请先运行 npm run server'
+        }
       }
+      // APK 直连模式：没有本机后端，providers 完全来自自定义连接（reloadProviders 处理）
       await reloadProviders()
 
       // 首次进应用：用最近更新过的那份档案兜底；空库时写入内置人格。

@@ -21,7 +21,16 @@ export const SAMPLING = {
  */
 export const THINKING_OFF = { type: 'disabled' } as const
 
+import { Capacitor } from '@capacitor/core'
 import { overrideFor } from './apiConfig.ts'
+
+/** APK/桌面原生环境判定 —— 直连模式只在 Capacitor 原生壳里启用 */
+function isNative(): boolean {
+  return Capacitor.isNativePlatform()
+}
+
+/** 退化重试的温度阶梯（与薄后端 server/index.mjs 保持同一顺序） */
+const RETRY_TEMPERATURES = [0.8, 0.6, 0.4]
 
 export interface ChatRequest {
   provider: string
@@ -83,6 +92,16 @@ export async function sendChat(req: ChatRequest, signal?: AbortSignal): Promise<
   // 前端配置的覆盖项（若该 provider 有配置）随请求带给本机后端 ——
   // 后端内存转发、不落盘；不配置时字段缺省，行为与 .env 模式完全一致
   const override = overrideFor(req.provider)
+
+  // 🔴 APK 直连模式（2026-09-23）：Capacitor 原生环境里没有 Node 后端，
+  // fetch 已被 CapacitorHttp patch 到原生层（无 CORS）—— 直接调模型 API
+  if (isNative()) {
+    if (!override?.baseUrl || !override.model) {
+      throw new ChatError('请先到「设置」添加模型连接（接口地址 + 模型名 + API Key）', 400)
+    }
+    return directChat(req, override, signal)
+  }
+
   const payload = override ? { ...req, override } : req
 
   const res = await fetch('/api/chat', {
@@ -113,8 +132,111 @@ export async function sendChat(req: ChatRequest, signal?: AbortSignal): Promise<
 
 /** 拉取可用后端清单（不含密钥），用于界面上的模型切换 */
 export async function fetchProviders(): Promise<import('./provider').ProviderInfo[]> {
+  // APK 直连模式：没有本机后端，清单完全来自自定义连接（chat store 已 merge）
+  if (isNative()) return []
   const res = await fetch('/api/providers')
   if (!res.ok) throw new ChatError(`无法获取后端清单（HTTP ${res.status}）`, res.status)
   const data = (await res.json()) as { providers: import('./provider').ProviderInfo[] }
   return data.providers ?? []
+}
+
+/**
+ * APK 直连：浏览器内直接调用模型 API（协议与薄后端的 callUpstream 一致）。
+ * 退化检测 + 三温度重试与桌面/网页版同规格；无缓存命中概念（各家不同，缺省 0）。
+ */
+async function directChat(
+  req: ChatRequest,
+  override: import('./apiConfig').ApiOverride,
+  signal?: AbortSignal,
+): Promise<ChatResponse> {
+  const { isDegenerate, truncateAtLastSentence } = await import('@/core/degeneration')
+  const base = override.baseUrl!.replace(/\/+$/, '')
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (override.apiKey) headers.Authorization = `Bearer ${override.apiKey}`
+  const messages = [
+    { role: 'system', content: req.system ?? '' },
+    ...req.history,
+    { role: 'user', content: req.userInput },
+  ]
+  const body = (temperature: number) =>
+    JSON.stringify({
+      model: override.model,
+      messages,
+      temperature,
+      top_p: SAMPLING.top_p,
+      frequency_penalty: SAMPLING.frequency_penalty,
+      max_tokens: req.maxTokens ?? SAMPLING.max_tokens,
+      ...(req.responseFormat === 'json' ? { response_format: { type: 'json_object' } } : {}),
+      thinking: THINKING_OFF,
+    })
+
+  const started = Date.now()
+  let lastText = ''
+  let lastFinish = 'unknown'
+  let lastUsage: ChatUsage = { prompt: 0, completion: 0, cacheHit: 0, reasoning: 0 }
+
+  for (let attempt = 0; attempt < RETRY_TEMPERATURES.length; attempt++) {
+    const temp = req.temperature ?? RETRY_TEMPERATURES[attempt]
+    // 🔴 /v1 兜底：官方地址常不带 /v1，404 时补一次（与薄后端同策略）
+    let url = `${base}/chat/completions`
+    let res = await fetch(url, { method: 'POST', headers, body: body(temp), signal })
+    if (res.status === 404 && !/\/v1(\/|$)/.test(base)) {
+      url = `${base}/v1/chat/completions`
+      res = await fetch(url, { method: 'POST', headers, body: body(temp), signal })
+    }
+
+    const text = await res.text()
+    if (!res.ok) throw new ChatError(`上游 ${req.provider} 返回 ${res.status}：${text.slice(0, 300)}`, res.status)
+
+    let data: {
+      choices?: { message?: { content?: string }; finish_reason?: string }[]
+      usage?: {
+        prompt_tokens?: number
+        completion_tokens?: number
+        prompt_cache_hit_tokens?: number
+        prompt_tokens_details?: { cached_tokens?: number }
+        completion_tokens_details?: { reasoning_tokens?: number }
+      }
+    }
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new ChatError(`上游返回了非 JSON 内容：${text.slice(0, 200)}`, res.status)
+    }
+
+    lastText = data.choices?.[0]?.message?.content ?? ''
+    lastFinish = data.choices?.[0]?.finish_reason ?? 'unknown'
+    const u = data.usage ?? {}
+    lastUsage = {
+      prompt: u.prompt_tokens ?? 0,
+      completion: u.completion_tokens ?? 0,
+      cacheHit: u.prompt_cache_hit_tokens ?? u.prompt_tokens_details?.cached_tokens ?? 0,
+      reasoning: u.completion_tokens_details?.reasoning_tokens ?? 0,
+    }
+
+    const [degen] = isDegenerate(lastText)
+    if (!degen) {
+      return {
+        content: lastText,
+        usage: lastUsage,
+        finishReason: lastFinish,
+        elapsedMs: Date.now() - started,
+        retries: attempt,
+        degraded: false,
+        provider: req.provider,
+        model: override.model!,
+      }
+    }
+  }
+
+  return {
+    content: truncateAtLastSentence(lastText),
+    usage: lastUsage,
+    finishReason: lastFinish,
+    elapsedMs: Date.now() - started,
+    retries: RETRY_TEMPERATURES.length - 1,
+    degraded: true,
+    provider: req.provider,
+    model: override.model!,
+  }
 }
