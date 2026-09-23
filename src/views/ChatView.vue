@@ -105,9 +105,7 @@ async function reset() {
           aria-label="切换人格"
           class="shrink-0"
         />
-        <p class="m-0 truncate text-sm tracking-wide text-[#3a3a3a]/55">
-          对话<template v-if="chat.persona.tagline"> · {{ chat.persona.tagline }}</template>
-        </p>
+        <span class="shrink-0 text-sm tracking-wide text-[#3a3a3a]/55">对话</span>
         <!-- R1 常驻标识：法规要求对话页可见的 AI 身份标识，不得藏在协议里 -->
         <span
           class="shrink-0 rounded-full bg-[#4a6fa5]/10 px-2.5 py-0.5 text-xs tracking-wide text-[#4a6fa5]"
@@ -160,38 +158,39 @@ async function reset() {
       {{ chat.error }}
     </p>
 
+    <!-- 输入容器：textarea + 底栏（模型/状态/发送）在同一个圆角框内（传统 AI 对话布局） -->
     <footer class="pb-8 pt-2">
-      <div class="flex items-end gap-3">
+      <div
+        class="rounded-3xl bg-white/65 px-4 pt-3 pb-2.5 shadow-[0_4px_24px_rgba(74,111,165,0.08)] transition-all duration-500 ease-in-out focus-within:bg-white/85 focus-within:shadow-[0_10px_40px_rgba(74,111,165,0.18)]"
+      >
         <textarea
           v-model="draft"
           rows="1"
           placeholder="说点什么……（Enter 发送）"
-          class="max-h-40 min-h-[3.25rem] flex-1 resize-none rounded-2xl bg-white/60 px-5 py-3 font-serif text-[15px] leading-relaxed tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 transition-all duration-500 ease-in-out focus:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+          class="max-h-40 min-h-[2.5rem] w-full resize-none bg-transparent px-2 pb-1 font-serif text-[15px] leading-relaxed tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none"
           @keydown="onKeydown"
         />
-        <button
-          type="button"
-          :disabled="chat.streaming || !draft.trim()"
-          class="rounded-2xl bg-[#4a6fa5] px-8 py-3 text-base text-white shadow-[0_4px_20px_rgba(74,111,165,0.12)] transition-all duration-500 ease-in-out hover:bg-[#4a6fa5]/90 hover:shadow-[0_10px_40px_rgba(74,111,165,0.35)] hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
-          @click="submit"
-        >
-          发送
-        </button>
-      </div>
-
-      <!-- 模型选择 + 状态行：模型按钮在输入区下方（传统 AI 对话的摆放），向上弹出 -->
-      <div class="mt-2 flex items-center gap-3">
-        <Dropdown
-          v-model="chat.currentProvider"
-          :options="providerOptions"
-          aria-label="切换模型服务"
-          direction="up"
-          compact
-          align="left"
-        />
-        <p class="mb-0 h-4 min-w-0 flex-1 truncate text-xs tracking-wide text-[#3a3a3a]/40">
-          {{ chat.memoryMeta ? chat.memoryMeta + ' · ' : '' }}{{ chat.statusLine }}
-        </p>
+        <div class="flex items-center gap-3">
+          <Dropdown
+            v-model="chat.currentProvider"
+            :options="providerOptions"
+            aria-label="切换模型服务"
+            direction="up"
+            compact
+            align="left"
+          />
+          <p class="mb-0 h-4 min-w-0 flex-1 truncate text-xs tracking-wide text-[#3a3a3a]/40">
+            {{ chat.memoryMeta ? chat.memoryMeta + ' · ' : '' }}{{ chat.statusLine }}
+          </p>
+          <button
+            type="button"
+            :disabled="chat.streaming || !draft.trim()"
+            class="shrink-0 rounded-full bg-[#4a6fa5] px-5 py-1.5 text-sm text-white shadow-[0_4px_20px_rgba(74,111,165,0.12)] transition-all duration-500 ease-in-out hover:bg-[#4a6fa5]/90 hover:shadow-[0_10px_40px_rgba(74,111,165,0.35)] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+            @click="submit"
+          >
+            发送
+          </button>
+        </div>
       </div>
     </footer>
   </div>

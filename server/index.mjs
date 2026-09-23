@@ -10,6 +10,9 @@
 
 import { createServer } from 'node:http'
 import { networkInterfaces } from 'node:os'
+import { readFileSync } from 'node:fs'
+import { join, dirname, extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { listProviders, resolveDefaultProvider, getProvider } from '../src/api/provider.ts'
 import { SAMPLING, THINKING_OFF } from '../src/api/chat.ts'
@@ -236,15 +239,60 @@ const server = createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0]
   const handler = ROUTES[`${req.method} ${path}`]
 
-  if (!handler) return sendJSON(res, 404, { error: `没有这个接口：${req.method} ${path}` })
-
-  try {
-    await handler(req, res)
-  } catch (err) {
-    console.error('[chat] 失败：', err)
-    if (!res.headersSent) sendJSON(res, 502, { error: String(err?.message ?? err) })
+  if (handler) {
+    try {
+      await handler(req, res)
+    } catch (err) {
+      console.error('[chat] 失败：', err)
+      if (!res.headersSent) sendJSON(res, 502, { error: String(err?.message ?? err) })
+    }
+    return
   }
+
+  // 静态托管 dist（2026-09-23，桌面端 Electron 的前置）：单进程 = API + 网页，
+  // 手机/局域网访问也只需要 8787 一个端口。SPA history 路由 fallback 到 index.html。
+  serveStatic(req, res, path)
 })
+
+/** dist 静态托管 —— 目录遍历防护：resolve 后必须在 dist 根内 */
+function serveStatic(req, res, path) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return sendJSON(res, 404, { error: `没有这个接口：${req.method} ${path}` })
+  }
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
+  const rel = path === '/' ? '/index.html' : path
+  const file = join(root, rel)
+  if (!file.startsWith(root)) return sendJSON(res, 403, { error: 'forbidden' })
+  try {
+    const data = readFileSync(file)
+    const ext = extname(file).toLowerCase()
+    const mime = MIME[ext] ?? 'application/octet-stream'
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' })
+    res.end(data)
+  } catch {
+    // SPA fallback：非资源路径回 index.html（history 路由刷新不 404）
+    try {
+      const index = readFileSync(join(root, 'index.html'))
+      res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache' })
+      res.end(index)
+    } catch {
+      sendJSON(res, 404, { error: `文件不存在：${path}（先 npm run build）` })
+    }
+  }
+}
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ico': 'image/x-icon',
+}
 
 // 🔴 2026-09-22：127.0.0.1 → 0.0.0.0 —— 手机/平板要在局域网里访问本机服务。
 // ⚠️ 仅限可信内网（家庭/办公室）：局域网内任何人都能用这个后端转发请求；
