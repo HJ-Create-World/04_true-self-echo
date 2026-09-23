@@ -21,12 +21,16 @@ export const SAMPLING = {
  */
 export const THINKING_OFF = { type: 'disabled' } as const
 
-import { Capacitor } from '@capacitor/core'
 import { overrideFor } from './apiConfig.ts'
 
-/** APK/桌面原生环境判定 —— 直连模式只在 Capacitor 原生壳里启用 */
+/**
+ * APK/桌面原生环境判定 —— 直连模式只在 Capacitor 原生壳里启用。
+ * 🔴 不能 import @capacitor/core：本文件被薄后端直接引用（前后端共享源），
+ * esbuild 把它 external 化后，打包 exe 的 asar 里没有 node_modules → 崩
+ * （HJ 实测报错）。改探测 Capacitor 注入的全局对象 —— 零依赖。
+ */
 function isNative(): boolean {
-  return Capacitor.isNativePlatform()
+  return typeof window !== 'undefined' && 'Capacitor' in window && !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
 }
 
 /** 退化重试的温度阶梯（与薄后端 server/index.mjs 保持同一顺序） */

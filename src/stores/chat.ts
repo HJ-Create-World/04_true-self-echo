@@ -9,11 +9,12 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { sendChat, fetchProviders, ChatError } from '@/api/chat'
-import { Capacitor } from '@capacitor/core'
-
-/** APK/桌面原生环境判定（直连模式开关） */
+/**
+ * APK/桌面原生环境判定（直连模式开关）——
+ * 🔴 不 import @capacitor/core（保持与后端共享的 api/chat.ts 同款零依赖探测）
+ */
 function isNative(): boolean {
-  return Capacitor.isNativePlatform()
+  return typeof window !== 'undefined' && 'Capacitor' in window && !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
 }
 
 import { getSelectedModel, listCustomConnections, loadApiConfig } from '@/api/apiConfig'
