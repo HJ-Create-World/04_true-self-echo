@@ -10,6 +10,7 @@
  */
 const { app, BrowserWindow, shell } = require('electron')
 const { join } = require('path')
+const { pathToFileURL } = require('url')
 
 /** 窗口引用（防 GC 关窗） */
 let win = null
@@ -44,9 +45,13 @@ function createWindow() {
   win.loadURL(URL)
 }
 
-/** 启动内置后端（server/index.mjs 是 ESM —— cjs 里只能动态 import） */
+/** 启动内置后端 —— 用 esbuild 预打的纯 JS bundle（Electron 内置 Node 不支持 strip-types） */
 async function startBackend() {
-  await import(join(__dirname, 'server', 'index.mjs'))
+  // 资源根路径显式传给后端（打包后 cwd 不可靠；asar 内路径 fs 已被 Electron patch）
+  process.env.APP_ROOT = join(__dirname, '..')
+  process.env.DIST_ROOT = join(__dirname, '..', 'dist')
+  // 🔴 Windows 动态 import 必须用 file:// URL（'D:\...' 会被当成 'd:' 协议）
+  await import(pathToFileURL(join(__dirname, '..', 'dist-server', 'server.cjs')).href)
 }
 
 app.whenReady().then(async () => {

@@ -171,17 +171,17 @@ async function reset() {
           @keydown="onKeydown"
         />
         <div class="flex items-center gap-3">
+          <p class="mb-0 h-4 min-w-0 flex-1 truncate text-xs tracking-wide text-[#3a3a3a]/40">
+            {{ chat.memoryMeta ? chat.memoryMeta + ' · ' : '' }}{{ chat.statusLine }}
+          </p>
           <Dropdown
             v-model="chat.currentProvider"
             :options="providerOptions"
             aria-label="切换模型服务"
             direction="up"
             compact
-            align="left"
+            align="right"
           />
-          <p class="mb-0 h-4 min-w-0 flex-1 truncate text-xs tracking-wide text-[#3a3a3a]/40">
-            {{ chat.memoryMeta ? chat.memoryMeta + ' · ' : '' }}{{ chat.statusLine }}
-          </p>
           <button
             type="button"
             :disabled="chat.streaming || !draft.trim()"

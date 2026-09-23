@@ -11,8 +11,7 @@
 import { createServer } from 'node:http'
 import { networkInterfaces } from 'node:os'
 import { readFileSync } from 'node:fs'
-import { join, dirname, extname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, extname } from 'node:path'
 
 import { listProviders, resolveDefaultProvider, getProvider } from '../src/api/provider.ts'
 import { SAMPLING, THINKING_OFF } from '../src/api/chat.ts'
@@ -254,12 +253,14 @@ const server = createServer(async (req, res) => {
   serveStatic(req, res, path)
 })
 
-/** dist 静态托管 —— 目录遍历防护：resolve 后必须在 dist 根内 */
+/** dist 静态托管 —— 目录遍历防护：resolve 后必须在 dist 根内。
+ *  🔴 dist 根不要用 import.meta.url 推导：esbuild CJS bundle 里它是 undefined；
+ *  由调用方（Electron 主进程）传 DIST_ROOT，命令行模式回落 cwd/dist */
 function serveStatic(req, res, path) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return sendJSON(res, 404, { error: `没有这个接口：${req.method} ${path}` })
   }
-  const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
+  const root = process.env.DIST_ROOT || join(process.cwd(), 'dist')
   const rel = path === '/' ? '/index.html' : path
   const file = join(root, rel)
   if (!file.startsWith(root)) return sendJSON(res, 403, { error: 'forbidden' })

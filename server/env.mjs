@@ -4,10 +4,14 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+/**
+ * 🔴 项目根不要用 fileURLToPath(import.meta.url) 推导：
+ * esbuild 打成 CJS bundle 后 import.meta.url 是 undefined（桌面端必炸）。
+ * 优先读调用方注入的 APP_ROOT（Electron 主进程设置），命令行回落 cwd。
+ */
+const ROOT = process.env.APP_ROOT ? resolve(process.env.APP_ROOT) : resolve(process.cwd())
 
 /** 解析一份 .env，返回键值对。支持 # 注释、引号包裹、空行。 */
 export function loadEnvFile(path) {
