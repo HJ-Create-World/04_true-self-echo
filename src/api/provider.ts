@@ -88,7 +88,7 @@ export function resolveDefaultProvider(
 ): ProviderConfig {
   const list = listProviders(env)
   if (list.length === 0) {
-    throw new Error('没有任何可用后端：请检查 .env 里的 BASE_URL / MODEL / API_KEY')
+    throw new Error('还没有可用的模型服务 —— 请到「设置」页添加你的模型连接（接口地址 + 模型名 + API Key）')
   }
   const target = list.find((p) => p.isDefault) ?? list[0]
   return getProvider(target.name, env)

@@ -13,7 +13,7 @@
     "start": "node server/index.mjs",
     "acc": "node --experimental-strip-types EXP_acceptance.mjs",
     "electron:dev": "npm run build && node electron/build-backend.mjs && electron .",
-    "electron:build": "npm run build && node electron/build-backend.mjs && electron-builder --win portable",
+    "electron:build": "npm run build && node electron/build-backend.mjs && electron-builder --win",
     "desktop:smoke": "node electron/build-backend.mjs && electron ."
   },
   "build": {
@@ -29,13 +29,24 @@
       "package.json"
     ],
     "asar": true,
+    "asarUnpack": [
+      "dist-server/**",
+      "dist/**"
+    ],
     "win": {
       "target": [
+        "nsis",
         "portable"
       ]
     },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "artifactName": "TrueSelfEcho-Setup-${version}.exe"
+    },
     "portable": {
-      "artifactName": "真我回响-桌面版.exe"
+      "artifactName": "TrueSelfEcho-Portable.exe"
     }
   },
   "dependencies": {
