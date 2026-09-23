@@ -164,6 +164,81 @@ function buildOverride(name: string, model: string): Record<string, string> {
   if (d.baseUrl.trim()) o.baseUrl = d.baseUrl.trim()
   return o
 }
+
+/* ---------- 获取模型列表（/api/models · 2026-09-23） ---------- */
+/**
+ * 用户的真实困境（HJ 实测反馈）：DeepSeek 官方文档只给 https://api.deepseek.com，
+ * 不知道该不该加 /v1、模型名有哪些（要等 400 报错才透露）。
+ * 「获取模型列表」一次解决两件事：后端探测 /v1 形态 + 拉模型 id 列表，
+ * 拉到后模型名输入框自动变成下拉选择。
+ */
+const modelOptions = ref<Record<string, string[]>>({})
+const fetchingModels = ref<string | null>(null)
+
+async function fetchModelList(kind: 'env' | 'custom', name: string) {
+  fetchingModels.value = kind + name
+  try {
+    const payload =
+      kind === 'env'
+        ? { provider: name, apiKey: drafts.value[name]!.apiKey.trim() || undefined, baseUrl: drafts.value[name]!.baseUrl.trim() || undefined }
+        : { baseUrl: customDraft.value.baseUrl, apiKey: customDraft.value.apiKey || undefined }
+    const res = await fetch('/api/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const data = (await res.json()) as { baseUrl?: string; models?: string[]; error?: string }
+    if (!res.ok || !data.models?.length) {
+      notice.value = `❌ 拉取失败：${data.error ?? res.status}`
+      return
+    }
+    modelOptions.value = { ...modelOptions.value, [name]: data.models }
+    // 🔴 把探测出的规范化 baseUrl 回填（用户不用纠结 /v1）
+    if (kind === 'env' && data.baseUrl) drafts.value[name]!.baseUrl = data.baseUrl
+    if (kind === 'custom' && data.baseUrl) customDraft.value.baseUrl = data.baseUrl
+    notice.value = `✅ 发现 ${data.models.length} 个模型，已可下拉选择`
+  } catch (e) {
+    notice.value = `❌ 拉取失败：${e instanceof Error ? e.message : String(e)}`
+  } finally {
+    fetchingModels.value = null
+  }
+}
+
+/** 自定义连接的连通测试（直接用表单里的值，不依赖已保存状态） */
+async function testCustom() {
+  const d = customDraft.value
+  if (!d.baseUrl.trim() || !d.model.trim()) {
+    notice.value = '测试前先填接口地址和模型名'
+    return
+  }
+  testing.value = d.name || 'custom'
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: d.name || 'custom-test',
+        system: '你是连通性测试器，只回复「pong」。',
+        history: [],
+        userInput: 'ping',
+        maxTokens: 16,
+        override: {
+          baseUrl: d.baseUrl.trim(),
+          model: d.model.trim(),
+          ...(d.apiKey?.trim() ? { apiKey: d.apiKey.trim() } : {}),
+        },
+      } satisfies ChatRequest & { override?: Record<string, string> }),
+    })
+    const data = (await res.json()) as { content?: string; error?: string; model?: string }
+    notice.value = res.ok
+      ? `✅ 连通（实际模型 ${data.model ?? '?'}，回复：${(data.content ?? '').slice(0, 20)}）`
+      : `❌ 失败：${data.error ?? res.status}`
+  } catch (e) {
+    notice.value = `❌ 失败：${e instanceof Error ? e.message : String(e)}`
+  } finally {
+    testing.value = null
+  }
+}
 </script>
 
 <template>
@@ -208,11 +283,30 @@ function buildOverride(name: string, model: string): Record<string, string> {
             </div>
 
             <div class="grid gap-2 md:grid-cols-3">
-              <input
-                v-model="drafts[p.name]!.model"
-                :placeholder="`模型名（默认 ${p.model}）`"
-                class="rounded-xl bg-white/70 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
-              />
+              <div class="flex items-center gap-1.5">
+                <input
+                  v-if="!modelOptions[p.name]?.length"
+                  v-model="drafts[p.name]!.model"
+                  :placeholder="`模型名（默认 ${p.model}）`"
+                  class="min-w-0 flex-1 rounded-xl bg-white/70 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+                />
+                <select
+                  v-else
+                  v-model="drafts[p.name]!.model"
+                  class="min-w-0 flex-1 rounded-xl bg-white/70 px-2 py-2 text-xs tracking-wide text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+                >
+                  <option v-for="m in modelOptions[p.name]" :key="m" :value="m">{{ m }}</option>
+                </select>
+                <button
+                  type="button"
+                  :disabled="fetchingModels === 'env' + p.name"
+                  class="shrink-0 rounded-xl bg-white/70 px-2.5 py-2 text-xs tracking-wide text-[#4a6fa5] transition-all duration-500 ease-in-out hover:bg-white active:scale-[0.98] disabled:opacity-40"
+                  title="从接口拉取该服务支持的模型列表"
+                  @click="fetchModelList('env', p.name)"
+                >
+                  {{ fetchingModels === 'env' + p.name ? '…' : '获取模型' }}
+                </button>
+              </div>
               <input
                 v-model="drafts[p.name]!.apiKey"
                 type="password"
@@ -320,14 +414,33 @@ function buildOverride(name: string, model: string): Record<string, string> {
                 :disabled="editingName !== ''"
                 class="rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 disabled:opacity-50"
               />
-              <input
-                v-model="customDraft.model"
-                placeholder="模型名（如：qwen-max / gpt-4o-mini）"
-                class="rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
-              />
+              <div class="flex items-center gap-1.5">
+                <input
+                  v-if="!modelOptions['custom']?.length"
+                  v-model="customDraft.model"
+                  placeholder="模型名（如：deepseek-flash / gpt-4o-mini）"
+                  class="min-w-0 flex-1 rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+                />
+                <select
+                  v-else
+                  v-model="customDraft.model"
+                  class="min-w-0 flex-1 rounded-xl bg-white/75 px-2 py-2 text-xs tracking-wide text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+                >
+                  <option v-for="m in modelOptions['custom']" :key="m" :value="m">{{ m }}</option>
+                </select>
+                <button
+                  type="button"
+                  :disabled="fetchingModels === 'customcustom'"
+                  class="shrink-0 rounded-xl bg-white/80 px-2.5 py-2 text-xs tracking-wide text-[#4a6fa5] transition-all duration-500 ease-in-out hover:bg-white active:scale-[0.98] disabled:opacity-40"
+                  title="从接口拉取该服务支持的模型列表"
+                  @click="fetchModelList('custom', 'custom')"
+                >
+                  {{ fetchingModels === 'customcustom' ? '…' : '获取模型' }}
+                </button>
+              </div>
               <input
                 v-model="customDraft.baseUrl"
-                placeholder="接口地址（到 /v1 为止，如 https://dashscope.aliyuncs.com/compatible-mode/v1）"
+                placeholder="接口地址（粘贴服务商给的即可，会自动识别 /v1）"
                 class="rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 md:col-span-2"
               />
               <input
@@ -338,13 +451,20 @@ function buildOverride(name: string, model: string): Record<string, string> {
                 class="rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 md:col-span-2"
               />
             </div>
-            <div class="mt-3 flex gap-2">
+            <div class="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
                 class="rounded-full bg-[#4a6fa5] px-4 py-1.5 text-xs tracking-wide text-white transition-all duration-500 ease-in-out hover:opacity-90 active:scale-[0.98]"
                 @click="saveNewCustom"
               >
                 {{ editingName === '' ? '添加' : '保存修改' }}
+              </button>
+              <button
+                type="button"
+                class="rounded-full bg-white/70 px-4 py-1.5 text-xs tracking-wide text-[#3a3a3a]/65 transition-all duration-500 ease-in-out hover:bg-white active:scale-[0.98]"
+                @click="testCustom"
+              >
+                测试连通
               </button>
               <button
                 type="button"

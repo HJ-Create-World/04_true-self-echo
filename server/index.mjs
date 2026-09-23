@@ -60,7 +60,11 @@ async function callUpstream(cfg, messages, temperature, maxTokens, jsonMode) {
   const timer = setTimeout(() => ac.abort(), UPSTREAM_TIMEOUT_MS)
 
   try {
-    const r = await fetch(`${cfg.baseURL}/chat/completions`, {
+    // 🔴 /v1 自动兜底（2026-09-23）：用户从官方文档粘贴的地址常不带 /v1
+    // （如 https://api.deepseek.com），部分服务必须走 /v1/chat/completions。
+    // 首发到裸地址 404 时，自动补 /v1 重试一次 —— 探测式修正，用户无感。
+    let url = `${cfg.baseURL}/chat/completions`
+    let r = await fetch(url, {
       method: 'POST',
       headers,
       signal: ac.signal,
@@ -77,6 +81,24 @@ async function callUpstream(cfg, messages, temperature, maxTokens, jsonMode) {
         thinking: THINKING_OFF,
       }),
     })
+    if (r.status === 404 && !/\/v1(\/|$)/.test(cfg.baseURL)) {
+      url = `${cfg.baseURL}/v1/chat/completions`
+      r = await fetch(url, {
+        method: 'POST',
+        headers,
+        signal: ac.signal,
+        body: JSON.stringify({
+          model: cfg.model,
+          messages,
+          temperature,
+          top_p: SAMPLING.top_p,
+          frequency_penalty: SAMPLING.frequency_penalty,
+          max_tokens: maxTokens ?? SAMPLING.max_tokens,
+          ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+          thinking: THINKING_OFF,
+        }),
+      })
+    }
 
     const text = await r.text()
     if (!r.ok) throw new Error(`上游 ${cfg.name} 返回 ${r.status}：${text.slice(0, 400)}`)
@@ -227,10 +249,58 @@ async function handleChat(req, res) {
 const USAGE = { since: null, total: { requests: 0, prompt: 0, completion: 0 }, byProvider: {} }
 USAGE.since = new Date().toISOString()
 
+/**
+ * POST /api/models —— 从 OpenAI 兼容服务拉取模型列表（2026-09-23）。
+ *
+ * 用户的真实困境：DeepSeek 官方文档只给 https://api.deepseek.com，
+ * 不知道该不该加 /v1、也不知道有哪些模型名（400 报错里才会透露）。
+ *
+ * 探测顺序：{base}/v1/models（OpenAI/硅基流动/百炼标准形态）→ {base}/models。
+ * 成功后返回**规范化 baseUrl**（chat 用同一形态拼路径）—— 前端把它回填，
+ * 用户从此不用纠结 /v1。
+ */
+async function handleModels(req, res) {
+  const body = await readBody(req)
+  const { provider, apiKey, baseUrl } = body
+
+  let base = typeof baseUrl === 'string' ? baseUrl.trim().replace(/\/+$/, '') : ''
+  let key = typeof apiKey === 'string' ? apiKey.trim() : ''
+  if (!base && provider) {
+    try {
+      const c = getProvider(provider, ENV)
+      base = c.baseURL
+      key = key || c.apiKey
+    } catch { /* .env 没有该 provider 就只能靠显式地址 */ }
+  }
+  if (!base) return sendJSON(res, 400, { error: '请先填写接口地址（或选择已配置的服务）' })
+
+  const candidates = base.endsWith('/v1') ? [`${base}/models`] : [`${base}/v1/models`, `${base}/models`]
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url, {
+        headers: key ? { Authorization: `Bearer ${key}` } : {},
+        signal: AbortSignal.timeout(12_000),
+      })
+      if (!r.ok) continue
+      const j = await r.json()
+      const ids = (Array.isArray(j.data) ? j.data : Array.isArray(j.models) ? j.models : [])
+        .map((m) => String(m?.id ?? m?.name ?? ''))
+        .filter(Boolean)
+      if (ids.length) {
+        return sendJSON(res, 200, { baseUrl: url.replace(/\/models$/, ''), models: ids })
+      }
+    } catch { /* 换下一个候选 */ }
+  }
+  sendJSON(res, 502, {
+    error: '无法从该接口拉取模型列表 —— 检查地址与 API Key，或该服务不支持 /models（手填模型名亦可）',
+  })
+}
+
 const ROUTES = {
   'GET /api/health': (_req, res) => sendJSON(res, 200, { ok: true, uptime: process.uptime() }),
   'GET /api/providers': (_req, res) => sendJSON(res, 200, { providers: listProviders(ENV) }),
   'GET /api/usage': (_req, res) => sendJSON(res, 200, USAGE),
+  'POST /api/models': handleModels,
   'POST /api/chat': handleChat,
 }
 
