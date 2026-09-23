@@ -78,13 +78,13 @@ try {
 
   /* ---------- M1 新增连接（baseUrl 不带 /v1）→ 获取模型 → 自动补 /v1 ---------- */
   await page.click('button:has-text("+ 新增连接")')
-  const customForm = page.locator('div:has(input[placeholder*="接口地址（粘贴"])').last()
-  await page.fill('input[placeholder*="名称（如"]', 'Mock服务')
+  // 🔴 用 data-testid 定位 —— :has() 会匹配所有祖先 div，.last() 会飘到 .env 行（假阳性教训）
+  const customForm = page.locator('[data-testid="custom-form"]')
+  await customForm.locator('input[placeholder*="名称（如"]').fill('Mock服务')
   await customForm.locator('input[placeholder*="接口地址（粘贴"]').fill(`http://127.0.0.1:${MOCK_PORT}`)
-  // 🔴 必须在 custom 表单容器内点按钮 —— 页面上 .env 行也有同名按钮，裸 hasText 会点错
   await customForm.locator('button:has-text("获取模型")').click()
   await page.waitForTimeout(1500)
-  const hasOptions = await page.locator('select option', { hasText: 'mock-alpha' }).count()
+  const hasOptions = await customForm.locator('select option', { hasText: 'mock-alpha' }).count()
   const filledBase = await customForm.locator('input[placeholder*="接口地址（粘贴"]').inputValue()
   check(
     'M1 获取模型：列表出现 + baseUrl 自动补 /v1',
@@ -94,9 +94,10 @@ try {
 
   /* ---------- M2 选模型 → 添加 → 测试连通 ---------- */
   await customForm.locator('select:has(option[value="mock-alpha"])').selectOption('mock-alpha')
-  await page.fill('input[placeholder*="API Key（本地推理服务可留空）"]', 'sk-mock')
-  await page.locator('button:text-is("添加")').click()
+  await customForm.locator('input[placeholder*="API Key"]').fill('sk-mock')
+  await customForm.locator('button:text-is("添加")').click()
   await page.waitForTimeout(500)
+  console.log('STORED:', await page.evaluate(() => localStorage.getItem('tse.apiConfig')))
   const inList = await page.locator('li', { hasText: 'Mock服务' }).count()
   check('M2 自定义连接已保存', inList >= 1)
 
@@ -108,28 +109,38 @@ try {
   const okNotice = await page.locator('text=连通（实际模型').count()
   check('M3 测试连通成功（走 mock chat）', okNotice >= 1, JSON.stringify(hits.chatBody)?.slice(0, 80))
 
-  /* ---------- M4 对话页选中 mock 模型发消息 ---------- */
+  /* ---------- M4 对话页多模型平铺：一个连接 → 两个模型选项，切换即用 ---------- */
   await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)
-  // 模型选择是自定义 Dropdown（footer 里 compact 按钮）→ 点开面板 → 面板内选 Mock服务
   const ddButton = page.locator('footer .relative > button').first()
   await ddButton.click()
   await page.waitForTimeout(400)
-  const opt = page.locator('[role="listbox"] button', { hasText: 'Mock服务' })
-  if ((await opt.count()) === 0) {
-    const dump = await page.evaluate(() => ({
-      listbox: document.querySelector('[role="listbox"]')?.innerText ?? '(无面板)',
-    }))
-    console.log('DUMP:', JSON.stringify(dump))
-  }
-  check('M4a 对话页模型面板出现 Mock服务', (await opt.count()) === 1)
-  await opt.click()
+  const alphaOpt = page.locator('[role="listbox"] button', { hasText: 'mock-alpha' })
+  const betaOpt = page.locator('[role="listbox"] button', { hasText: 'mock-beta' })
+  const alphaCount = await alphaOpt.count()
+  const betaCount = await betaOpt.count()
+  check(
+    'M4a 一个连接的两个模型都平铺到面板',
+    alphaCount === 1 && betaCount === 1,
+    `alpha=${alphaCount} beta=${betaCount}`,
+  )
+  // 切到 mock-beta 发消息 → 请求 model 必须是 mock-beta
+  await betaOpt.click()
   await page.waitForTimeout(400)
   await page.fill('textarea', 'ping')
   await page.click('button:has-text("发送")')
   await page.waitForTimeout(4000)
-  const chatHit = hits.chatBody && hits.chatBody.model === 'mock-alpha'
-  check('M4b 对话请求走 mock（model=mock-alpha）', chatHit === true)
+  const betaHit = hits.chatBody && hits.chatBody.model === 'mock-beta'
+  check('M4b 切换后请求带选中的模型（model=mock-beta）', betaHit === true)
+  // 再切回 mock-alpha → 请求 model 回到 alpha（连接内自由切换）
+  await ddButton.click()
+  await page.waitForTimeout(300)
+  await alphaOpt.click()
+  await page.fill('textarea', 'ping')
+  await page.click('button:has-text("发送")')
+  await page.waitForTimeout(4000)
+  const alphaHit = hits.chatBody && hits.chatBody.model === 'mock-alpha'
+  check('M4c 切回 alpha 后请求 model=mock-alpha（连接内自由切换）', alphaHit === true)
 } catch (e) {
   check('FATAL', false, e instanceof Error ? `${e.name}: ${e.message}` : String(e))
 } finally {

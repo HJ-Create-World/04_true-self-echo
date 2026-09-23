@@ -14,6 +14,7 @@ import { nextTick, computed, onMounted, ref, watch } from 'vue'
 
 import MessageBubble from '@/components/MessageBubble.vue'
 import Dropdown, { type DropdownOption } from '@/components/ui/Dropdown.vue'
+import { saveSelectedModel } from '@/api/apiConfig'
 import { CRISIS_NOTICE, detectCrisis } from '@/core/crisis'
 import { useChatStore } from '@/stores/chat'
 import { useRosterStore } from '@/stores/roster'
@@ -49,10 +50,22 @@ onMounted(async () => {
   await scrollToEnd()
 })
 
-/** 模型下拉选项（含自定义连接；hint 显示模型名） */
+/** 模型下拉选项（多模型平铺：一个连接拉到 N 个模型 → N 个选项，value 是复合键） */
 const providerOptions = computed<DropdownOption[]>(() =>
-  chat.providers.map((p) => ({ value: p.name, label: p.name, hint: p.model })),
+  chat.providers.map((p) => ({ value: `${p.name}::${p.model}`, label: p.model, hint: p.name })),
 )
+
+/** 复合键 ⇄ (连接, 模型) 双写；选中模型持久化 —— extract/monologue 经 overrideFor 自动跟随 */
+const selectedModelKey = computed({
+  get: () => `${chat.currentProvider}::${chat.currentModel}`,
+  set: (key: string) => {
+    const [name, model] = key.split('::')
+    if (!name || !model) return
+    chat.currentProvider = name
+    chat.currentModel = model
+    saveSelectedModel(name, model)
+  },
+})
 
 
 watch(
@@ -174,14 +187,14 @@ async function reset() {
           <p class="mb-0 h-4 min-w-0 flex-1 truncate text-xs tracking-wide text-[#3a3a3a]/40">
             {{ chat.memoryMeta ? chat.memoryMeta + ' · ' : '' }}{{ chat.statusLine }}
           </p>
-          <Dropdown
-            v-model="chat.currentProvider"
-            :options="providerOptions"
-            aria-label="切换模型服务"
-            direction="up"
-            compact
-            align="right"
-          />
+        <Dropdown
+          v-model="selectedModelKey"
+          :options="providerOptions"
+          aria-label="切换模型服务"
+          direction="up"
+          compact
+          align="right"
+        />
           <button
             type="button"
             :disabled="chat.streaming || !draft.trim()"

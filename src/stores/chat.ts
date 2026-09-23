@@ -9,7 +9,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { sendChat, fetchProviders, ChatError } from '@/api/chat'
-import { listCustomConnections } from '@/api/apiConfig'
+import { getSelectedModel, listCustomConnections, loadApiConfig } from '@/api/apiConfig'
 import type { SystemPromptParts, TurnMessage } from '@/core/prompt'
 import { buildMessages, trimHistory } from '@/core/prompt'
 import { renderMemoryBlock } from '@/memory/inject'
@@ -48,6 +48,8 @@ export const useChatStore = defineStore('chat', () => {
   const error = ref<string | null>(null)
   const providers = ref<{ name: string; model: string; isDefault: boolean }[]>([])
   const currentProvider = ref<string>('')
+  /** 当前选中的模型（多模型平铺后与连接解耦；发请求时叠加进 override.model） */
+  const currentModel = ref<string>('')
   const lastMeta = ref<string>('')
 
   /** 当前正在对话的人格。Phase 1 是内置的，Phase 2 起可从投料结果切换。 */
@@ -88,10 +90,15 @@ export const useChatStore = defineStore('chat', () => {
   const statusLine = computed(() => lastMeta.value)
 
   /**
-   * 重建模型下拉：.env 服务（/api/providers）+ 前端自定义连接。
-   * 🔴 必须**重建**而不是在旧列表上叠加 —— 否则删除自定义连接后
-   * 旧条目会残留在下拉里（custom_provider_e2e C4 抓的）。
-   * 当前选中的连接被删除时自动回退到默认。
+   * 重建模型下拉（2026-09-23 · 多模型平铺）。
+   *
+   * 选项粒度 = **连接 × 模型**：一个连接拉到 N 个模型就展开成 N 个选项
+   * （用户配一个 API 地址，该地址下所有模型都能在对话页直接切换，
+   * 不用为每个模型建一条连接）。选项 value 是复合键 `${连接}::${模型}`；
+   * 请求的 model 由 overrideFor 读 selectedModel（持久化，跨重启保持）。
+   *
+   * 🔴 必须**重建**而不是在旧列表上叠加 —— 否则删除连接/模型后旧选项残留
+   * （custom_provider_e2e C4 抓的）。当前选中项失效时自动回退到默认。
    */
   async function reloadProviders() {
     try {
@@ -99,17 +106,38 @@ export const useChatStore = defineStore('chat', () => {
     } catch {
       /* 拉不到 .env 清单就保留现状，至少自定义连接还在 */
     }
-    const customs = listCustomConnections().map((c) => ({
-      name: c.name,
-      model: c.model,
-      isDefault: false,
-    }))
-    providers.value = [
-      ...providers.value.filter((p) => !customs.some((c) => c.name === p.name)),
-      ...customs,
-    ]
-    if (currentProvider.value && !providers.value.some((p) => p.name === currentProvider.value)) {
-      currentProvider.value = providers.value.find((p) => p.isDefault)?.name ?? providers.value[0]?.name ?? ''
+
+    const flat: { name: string; model: string; isDefault: boolean }[] = []
+    const seenConn = new Set<string>()
+    for (const p of providers.value) {
+      if (seenConn.has(p.name)) continue
+      seenConn.add(p.name)
+      const models = loadApiConfig()[p.name]?.models?.filter(Boolean) ?? []
+      if (models.length) {
+        for (const m of models) {
+          flat.push({ name: p.name, model: m, isDefault: p.isDefault && m === models[0] })
+        }
+      } else {
+        flat.push({ name: p.name, model: p.model, isDefault: p.isDefault })
+      }
+    }
+    for (const c of listCustomConnections()) {
+      if (seenConn.has(c.name)) continue
+      const models = loadApiConfig()[c.name]?.models?.filter(Boolean) ?? [c.model]
+      for (const m of models) flat.push({ name: c.name, model: m, isDefault: false })
+    }
+    providers.value = flat
+
+    // 用户选中的「连接::模型」不在列表里（连接被删/模型下架）→ 回退到默认
+    const stillThere = flat.some(
+      (f) => f.name === currentProvider.value && f.model === currentModel.value,
+    )
+    if (!stillThere) {
+      const def = flat.find((f) => f.isDefault) ?? flat[0]
+      currentProvider.value = def?.name ?? ''
+      // 默认连接恢复用户上次选中的模型（per-provider 记忆，跨重启保持）
+      const remembered = (def && getSelectedModel(def.name)) || def?.model || ''
+      currentModel.value = remembered
     }
   }
 
@@ -117,8 +145,6 @@ export const useChatStore = defineStore('chat', () => {
     if (!initialized.value) {
       try {
         providers.value = await fetchProviders()
-        const def = providers.value.find((p) => p.isDefault) ?? providers.value[0]
-        currentProvider.value = def?.name ?? ''
       } catch {
         providers.value = []
         error.value = '连不上薄后端，请先运行 npm run server'
@@ -364,6 +390,7 @@ function fmtTokens(n: number): string {
     send,
     reset,
     reloadProviders,
+    currentModel,
     usePersona,
     switchTo,
     refreshPersonaList,

@@ -31,12 +31,19 @@ export interface ApiOverride {
    * 无此标志 = 给 .env 里已有的 provider 做字段级覆盖（两者可并存）。
    */
   custom?: boolean
+  /**
+   * 「获取模型」拉到的模型列表缓存（2026-09-23）—— 一个连接下的所有模型
+   * 都会平铺到对话页下拉里直接切换，不用为每个模型建一条连接。
+   */
+  models?: string[]
 }
 
 /** provider 名 → 覆盖项。只存有内容的字段 */
 export type ApiConfigMap = Record<string, ApiOverride>
 
 const KEY = 'tse.apiConfig'
+/** 用户在对话页选中的模型（provider 名 → 模型名），跨重启保持 */
+const SELECTED_KEY = 'tse.selectedModel'
 
 export function loadApiConfig(): ApiConfigMap {
   try {
@@ -57,16 +64,21 @@ export function saveApiConfig(map: ApiConfigMap): void {
   }
 }
 
-/** 取某个 provider 的覆盖项（空字段视为未配置） */
+/** 取某个 provider 的覆盖项（空字段视为未配置）。
+ *  🔴 若用户在对话页选过模型（selectedModel），model 以它为准 —— 这样
+ *  send / extract / monologue 全部自动跟随用户的选择，零签名改动 */
 export function overrideFor(provider: string): ApiOverride | undefined {
   const map = loadApiConfig()
   const o = map[provider]
   if (!o) return undefined
   const clean: ApiOverride = {}
+  const picked = getSelectedModel(provider)
   if (o.apiKey?.trim()) clean.apiKey = o.apiKey.trim()
-  if (o.model?.trim()) clean.model = o.model.trim()
   if (o.baseUrl?.trim()) clean.baseUrl = o.baseUrl.trim()
+  clean.model = picked ?? o.model?.trim() ?? ''
+  if (!clean.model) delete clean.model
   if (o.custom) clean.custom = true
+  if (o.models?.length) clean.models = o.models
   return Object.keys(clean).length ? clean : undefined
 }
 
@@ -107,5 +119,35 @@ export function saveCustomConnection(c: CustomConnection): void {
 export function deleteConnection(name: string): void {
   const map = loadApiConfig()
   delete map[name]
+  saveApiConfig(map)
+}
+
+/* ---------- 选中模型（对话页下拉的持久化选择） ---------- */
+
+export function getSelectedModel(provider: string): string | undefined {
+  try {
+    const obj = JSON.parse(localStorage.getItem(SELECTED_KEY) ?? '{}') as Record<string, string>
+    return obj[provider] || undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function saveSelectedModel(provider: string, model: string): void {
+  try {
+    const obj = JSON.parse(localStorage.getItem(SELECTED_KEY) ?? '{}') as Record<string, string>
+    obj[provider] = model
+    localStorage.setItem(SELECTED_KEY, JSON.stringify(obj))
+  } catch {
+    /* 存不了就算了 */
+  }
+}
+
+/** 把「获取模型」的列表缓存进指定条目（.env 覆盖条目或自定义连接通用） */
+export function saveModelsToListing(provider: string, models: string[]): void {
+  const map = loadApiConfig()
+  const o = map[provider] ?? {}
+  o.models = models
+  map[provider] = o
   saveApiConfig(map)
 }

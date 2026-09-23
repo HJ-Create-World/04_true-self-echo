@@ -20,6 +20,7 @@ import {
   loadApiConfig,
   saveApiConfig,
   saveCustomConnection,
+  saveModelsToListing,
   type ApiConfigMap,
   type CustomConnection,
 } from '@/api/apiConfig'
@@ -75,6 +76,8 @@ function saveNewCustom() {
     model: d.model.trim(),
     apiKey: d.apiKey?.trim() || undefined,
   })
+  // 拉过的模型列表随连接一起持久化（对话页多模型平铺的数据源）
+  if (customModelsCached?.length) saveModelsToListing(d.name.trim(), customModelsCached)
   refreshCustoms()
   chat.reloadProviders()
   notice.value = `已保存自定义连接「${d.name.trim()}」—— 对话页下拉里现在可以选它`
@@ -174,6 +177,8 @@ function buildOverride(name: string, model: string): Record<string, string> {
  */
 const modelOptions = ref<Record<string, string[]>>({})
 const fetchingModels = ref<string | null>(null)
+/** 自定义连接表单里拉到的模型列表 —— 保存连接时一起持久化 */
+let customModelsCached: string[] | null = null
 
 async function fetchModelList(kind: 'env' | 'custom', name: string) {
   fetchingModels.value = kind + name
@@ -196,6 +201,10 @@ async function fetchModelList(kind: 'env' | 'custom', name: string) {
     // 🔴 把探测出的规范化 baseUrl 回填（用户不用纠结 /v1）
     if (kind === 'env' && data.baseUrl) drafts.value[name]!.baseUrl = data.baseUrl
     if (kind === 'custom' && data.baseUrl) customDraft.value.baseUrl = data.baseUrl
+    // 🔴 模型列表持久化：.env 条目立即存；custom 表单未保存，随 saveNewCustom 一起写
+    //    （⚠️ custom 不能立即存 —— 条目还不存在，会写出无 custom 标志的脏条目）
+    if (kind === 'env') saveModelsToListing(name, data.models)
+    if (kind === 'custom') customModelsCached = data.models
     notice.value = `✅ 发现 ${data.models.length} 个模型，已可下拉选择`
   } catch (e) {
     notice.value = `❌ 拉取失败：${e instanceof Error ? e.message : String(e)}`
@@ -406,7 +415,7 @@ async function testCustom() {
           </p>
 
           <!-- 新增 / 编辑表单 -->
-          <div v-if="editingName !== null" class="mt-3 rounded-2xl bg-white/60 p-4">
+          <div v-if="editingName !== null" class="mt-3 rounded-2xl bg-white/60 p-4" data-testid="custom-form">
             <div class="grid gap-2 md:grid-cols-2">
               <input
                 v-model="customDraft.name"
