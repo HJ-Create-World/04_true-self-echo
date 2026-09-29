@@ -60,7 +60,10 @@ export async function generateMonologue(
   provider: string,
   signal?: AbortSignal,
 ): Promise<MonologueResult> {
-  const wire = buildMessages(parts, history.slice(-4), buildMonologueInput())
+  // 剥掉对话形态区 —— 独白是没说出口的话，不是「发消息」，
+  // 连发/短消息的约束在这里只会误导输出（2026-09-29 styleBlock 引入）。
+  const monoParts: SystemPromptParts = { ...parts, styleBlock: undefined }
+  const wire = buildMessages(monoParts, history.slice(-4), buildMonologueInput())
 
   const res = await sendChat(
     {

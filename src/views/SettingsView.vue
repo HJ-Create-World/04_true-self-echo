@@ -12,6 +12,7 @@
 import { onMounted, ref } from 'vue'
 
 import { fetchProviders, type ChatRequest } from '@/api/chat'
+import { loadProactiveEnabled, saveProactiveEnabled } from '@/core/proactive'
 import type { ProviderInfo } from '@/api/provider'
 import {
   deleteConnection,
@@ -27,6 +28,14 @@ import {
 import { useChatStore } from '@/stores/chat'
 
 const chat = useChatStore()
+
+/** 主动对话开关（L1 开场白 + L2 沉默触发共用；夜间静音不受此开关影响，恒生效） */
+const proactiveOn = ref(loadProactiveEnabled())
+
+function toggleProactive() {
+  proactiveOn.value = !proactiveOn.value
+  saveProactiveEnabled(proactiveOn.value)
+}
 
 const providers = ref<ProviderInfo[]>([])
 const loaded = ref(false)
@@ -492,6 +501,26 @@ async function testCustom() {
         >
           {{ notice }}
         </p>
+      </section>
+
+      <!-- 主动对话（2026-09-29 体验迭代）：让 TA 先开口 -->
+      <section class="rounded-2xl bg-white/60 p-6">
+        <header class="mb-4">
+          <h2 class="m-0 text-base tracking-wide">主动对话</h2>
+          <p class="mb-0 mt-1.5 text-xs leading-relaxed tracking-wide text-[#3a3a3a]/50">
+            允许 TA 主动找你说话：隔了半天以上再进来时先开口，或你沉默一阵子时主动聊一句。
+            连续两次没有回应就会停下来；<b>每晚 23:00 – 次日 8:00 恒静音</b>，不受此开关影响。
+          </p>
+        </header>
+        <label class="flex cursor-pointer items-center gap-3 text-sm tracking-wide text-[#3a3a3a]">
+          <input
+            type="checkbox"
+            :checked="proactiveOn"
+            class="h-4 w-4 accent-[#4a6fa5]"
+            @change="toggleProactive"
+          />
+          允许 TA 主动找我（关闭后 TA 只在被回复时说话）
+        </label>
       </section>
     </main>
   </div>

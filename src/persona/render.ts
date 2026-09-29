@@ -10,7 +10,7 @@
  * 已经渲染好的纯文本（SystemPromptParts）。
  */
 
-import { RED_LINES_HEAD, RED_LINE_TAIL_BODY } from '@/core/constraints'
+import { DIALOGUE_STYLE, RED_LINES_HEAD, RED_LINE_TAIL_BODY } from '@/core/constraints'
 import type { SystemPromptParts } from '@/core/prompt'
 import type { Block, FrozenLayer, PersonaProfile } from './schema'
 
@@ -126,9 +126,10 @@ export function renderPersonaBody(frozen: FrozenLayer): string {
 }
 
 /**
- * 人格档案 → System Prompt 三段。
+ * 人格档案 → System Prompt 段结构。
  *
  * 段 A / 段 D 是**产品级红线**（core/constraints.ts），与人格无关；
+ * 段 C 是**产品级对话形态**（IM 语境 + 连发约定，2026-09-29 体验迭代）；
  * 段 D 前面拼上该人格的 tagline —— 这样重注入每轮都带着她的气质，
  * 同时保持 E5 验证过的「越重越轻。不追问，不长篇安慰。」这个形状。
  */
@@ -137,6 +138,7 @@ export function buildPromptParts(profile: PersonaProfile): SystemPromptParts {
   return {
     constraintsHead: RED_LINES_HEAD,
     personaBody: renderPersonaBody(profile.frozen),
+    styleBlock: DIALOGUE_STYLE,
     constraintsTail: tagline ? `${tagline}。${RED_LINE_TAIL_BODY}` : RED_LINE_TAIL_BODY,
   }
 }

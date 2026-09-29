@@ -22,23 +22,27 @@ export interface TurnMessage {
   content: string
 }
 
-/** system 的三段结构（§2.1）。Phase 3 起多一个可选的**记忆区** */
+/** system 的段结构（§2.1）。Phase 3 起多一个可选的**记忆区**，体验迭代起多一个**对话形态区** */
 export interface SystemPromptParts {
   /** 硬约束，≤120 字，放最顶 */
   constraintsHead: string
   /** 人格档案正文 */
   personaBody: string
   /**
-   * 记忆区（可选，Phase 3）—— 关于对方的事，来自过往对话。
+   * 对话形态区（可选，2026-09-29 体验迭代）—— IM 语境 + 提问密度 + 连发约定。
    *
    * ⚠️ **位置是被刻意选定的，不要挪**：
-   * 拼接顺序是 [头, 人格正文, **记忆区**, 尾]。
-   * E5 验证过的是「约束头在最顶 / 约束尾在最末」这两条不变量，
-   * 记忆区塞在人格正文**里面**（作为它的一部分）可以同时保住这两条；
-   * 如果单独成段插在头和尾之间，虽然形式上也满足，但会让「三明治」
-   * 变成「四明治」，属于换了一个未被验证的输入形状。
+   * 拼接顺序是 [头, 人格正文, **形态区**, 记忆区, 尾]。
+   * E5 验证的不变量是「头在最顶 / 尾在最末」两条，中间插段不破坏它们
+   * （记忆区已有先例）。它不进人格档案的理由见 core/constraints.ts 的 DIALOGUE_STYLE。
    *
-   * 另外它是 `可选` 的：没有记忆（新人格 / 空演化层）时必须完全不出现，
+   * 可选：不需要对话形态约束的生成场景（如内心独白）应显式剥掉它。
+   */
+  styleBlock?: string
+  /**
+   * 记忆区（可选，Phase 3）—— 关于对方的事，来自过往对话。
+   *
+   * ⚠️ 空字符串会被滤掉，所以没有记忆时区块完全不存在，
    * 连标题都不能有 —— 否则模型会对着一个空区块编内容。
    */
   memoryBlock?: string
@@ -58,12 +62,18 @@ export interface ReinjectionPayload {
  * 组装 system。
  * 拼接顺序是唯一真理来源，不要在任何地方另拼一份。
  *
- * 记忆区（可选）**算作人格正文的一部分**：它插在正文之后、约束尾之前，
- * 从而保住「头在最顶 / 尾在最末」这两条 E5 验证过的不变量。
- * 空字符串会被滤掉，所以没有记忆时区块完全不存在。
+ * 段顺序：[约束头, 人格正文, 形态区(可选), 记忆区(可选), 约束尾]。
+ * 「头在最顶 / 尾在最末」是 E5 验证过的两条不变量，中间插段不破坏它们。
+ * 空字符串会被滤掉，可选区块不存在时完全不留痕。
  */
 export function buildSystemPrompt(parts: SystemPromptParts): string {
-  return [parts.constraintsHead, parts.personaBody, parts.memoryBlock, parts.constraintsTail]
+  return [
+    parts.constraintsHead,
+    parts.personaBody,
+    parts.styleBlock,
+    parts.memoryBlock,
+    parts.constraintsTail,
+  ]
     .map((s) => s?.trim() ?? '')
     .filter(Boolean)
     .join('\n\n')

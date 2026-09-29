@@ -8,7 +8,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { sendChat, fetchProviders, ChatError } from '@/api/chat'
+import { sendChat, fetchProviders, ChatError, type ChatResponse } from '@/api/chat'
 /**
  * APK/桌面原生环境判定（直连模式开关）——
  * 🔴 不 import @capacitor/core（保持与后端共享的 api/chat.ts 同款零依赖探测）
@@ -18,6 +18,14 @@ function isNative(): boolean {
 }
 
 import { getSelectedModel, listCustomConnections, loadApiConfig } from '@/api/apiConfig'
+import { burstDelay, sleep, splitBurst } from '@/core/burst'
+import {
+  GREETING_INSTRUCTION,
+  PROACTIVE,
+  SILENCE_INSTRUCTION,
+  isQuietHour,
+  loadProactiveEnabled,
+} from '@/core/proactive'
 import type { SystemPromptParts, TurnMessage } from '@/core/prompt'
 import { buildMessages, trimHistory } from '@/core/prompt'
 import { renderMemoryBlock } from '@/memory/inject'
@@ -59,6 +67,25 @@ export const useChatStore = defineStore('chat', () => {
   /** 当前选中的模型（多模型平铺后与连接解耦；发请求时叠加进 override.model） */
   const currentModel = ref<string>('')
   const lastMeta = ref<string>('')
+
+  /* ---------- 连发与主动对话（2026-09-29 体验迭代） ---------- */
+
+  /** 用户在 AI 生成期间连发的输入 —— turn 结束后作为下一轮消费（A2） */
+  const pendingInputs = ref<string[]>([])
+
+  /** 主动消息连续几次没有得到回应（L2 止损计数，用户发言即归零） */
+  const unansweredProactive = ref(0)
+
+  /** 最后一次「用户活动」（发言 / 上次主动消息）的时间 —— 静默计时的起点 */
+  const lastActivityAt = ref(Date.now())
+
+  /** L2 定时器句柄（ChatView 生命周期内有效，离开对话页即停） */
+  let proactiveTimer: number | null = null
+
+  function markUserActivity(): void {
+    lastActivityAt.value = Date.now()
+    unansweredProactive.value = 0
+  }
 
   /** 当前正在对话的人格。Phase 1 是内置的，Phase 2 起可从投料结果切换。 */
   const persona = ref<PersonaProfile>(ELYSIA_PROFILE)
@@ -187,6 +214,9 @@ export const useChatStore = defineStore('chat', () => {
     // 显式选定过人格之后，后续的 init 不许再自动改选（见 initialized 的注释）
     initialized.value = true
     lastMeta.value = ''
+    // 换人重新计时 —— 静默触发与止损计数都是「会话内」状态，不跨人格
+    pendingInputs.value = []
+    markUserActivity()
     await openConversation()
   }
 
@@ -199,40 +229,72 @@ export const useChatStore = defineStore('chat', () => {
     return trimHistory(all, KEEP_ROUNDS)
   }
 
+  /**
+   * 发送入口（A2 用户连发）。
+   *
+   * AI 生成期间用户再发消息**不再丢弃**，进队列；
+   * 当前 turn 结束后队列整体作为下一轮消费
+   * （用户连发三条 → 一条不落全被看到，合并成一次生成一起回），
+   * 循环直到队列清空。
+   */
   async function send(text: string) {
     const input = text.trim()
-    if (!input || streaming.value || conversationId.value === null) return
+    if (!input || conversationId.value === null) return
+    if (streaming.value) {
+      pendingInputs.value.push(input)
+      return
+    }
+
+    await runTurn([input])
+    while (pendingInputs.value.length && !error.value) {
+      await runTurn(pendingInputs.value.splice(0))
+    }
+  }
+
+  /** 执行一轮对话：inputs 是这一轮要处理的用户消息（用户连发时多条） */
+  async function runTurn(inputs: string[]) {
+    if (conversationId.value === null || inputs.length === 0) return
 
     error.value = null
     streaming.value = true
+    markUserActivity()
 
     const isFirst = messages.value.length === 0
     const history = toHistory()
-    const now = Date.now()
     // 记下这一轮**开始前**的演化层 —— 用于判断「这轮有没有真的改变什么」
     const evolvingBefore = JSON.stringify(persona.value.evolving)
 
-    const userRow: MessageRow = {
-      conversationId: conversationId.value,
-      role: 'user',
-      content: input,
-      createdAt: now,
+    // 连发的每条独立落库 —— 保留真人消息形态，回放历史时也是多条。
+    // createdAt 依次 +1ms：sortBy 对同值不保证顺序，连发会乱序。
+    const now = Date.now()
+    const userIds: number[] = []
+    for (let i = 0; i < inputs.length; i++) {
+      const userRow: MessageRow = {
+        conversationId: conversationId.value,
+        role: 'user',
+        content: inputs[i],
+        createdAt: now + i,
+      }
+      const uid = await appendMessage(userRow)
+      messages.value.push({ ...userRow, id: uid })
+      userIds.push(uid)
     }
-    const userId = await appendMessage(userRow)
-    messages.value.push({ ...userRow, id: userId })
-    if (isFirst) await retitleFromFirst(conversationId.value, input)
+    if (isFirst) await retitleFromFirst(conversationId.value, inputs[0])
+
+    // 连发合并成一段喂给模型 —— 部分上游不收连续多条 user，合并最稳
+    const merged = inputs.join('\n')
 
     try {
       // ⚠️ 顺序约束③④由 buildMessages 统一保证，这里不要再手工拼 reminder
       // 人格正文用缓存好的 parts；**记忆区是每轮现算的** ——
       // 它依赖本轮输入（关键词触发），所以不能进缓存。
-      const sel = selectMemories(persona.value.evolving.memories, input)
+      const sel = selectMemories(persona.value.evolving.memories, merged)
       const withMemory: SystemPromptParts = { ...parts.value, memoryBlock: renderMemoryBlock(sel) }
       memoryMeta.value = sel.pinned.length + sel.triggered.length
         ? `记忆 ${sel.pinned.length}+${sel.triggered.length} 条`
         : ''
 
-      const wire = buildMessages(withMemory, history, input)
+      const wire = buildMessages(withMemory, history, merged)
 
       const res = await sendChat({
         provider: currentProvider.value,
@@ -241,63 +303,170 @@ export const useChatStore = defineStore('chat', () => {
         userInput: wire[wire.length - 1].content,
       })
 
-      const botRow: MessageRow = {
-        conversationId: conversationId.value,
+      const botId = await deliverBurst(res)
+
+      // 记忆抽取 + 关系温度（Phase 3）。放最后：抽取失败**不能**影响这轮对话已经成功的事实。
+      const ext = await extractAndStore(merged, res.content)
+
+      // ⭐ 快照：只在演化层**真的变了**时才记。
+      //    没变化的一轮是重复点，画在曲线上是噪声；而且「回滚到它」没有意义
+      //    （回滚回去和现在一模一样）。只有真实变化才值得留一帧。
+      await maybeSnapshot(evolvingBefore, ext, botId)
+    } catch (e) {
+      error.value = e instanceof ChatError ? e.message : String(e)
+    } finally {
+      streaming.value = false
+    }
+  }
+
+  /**
+   * 一次生成 → 拆条 → 逐条延迟落库显示（A1 AI 连发）。
+   *
+   * 第一条立即出现（用户已经等了整个生成时长），后续每条按前一条的
+   * 「打字时长」延迟 —— 像对方在一条接一条地发，而不是倒出一段作文。
+   * degraded 标注只挂第一条：它描述的是整次生成，不用每条都吓人。
+   *
+   * 返回最后一条消息的 id（快照的 messageId 用）。
+   */
+  async function deliverBurst(res: ChatResponse): Promise<number> {
+    const burst = splitBurst(res.content)
+    let lastId = 0
+    for (let i = 0; i < burst.length; i++) {
+      if (i > 0) await sleep(burstDelay(burst[i - 1]))
+      const row: MessageRow = {
+        conversationId: conversationId.value!,
         role: 'assistant',
-        content: res.content,
+        content: burst[i],
         createdAt: Date.now(),
-        degraded: res.degraded,
+        degraded: i === 0 ? res.degraded : undefined,
         provider: res.provider,
         model: res.model,
         elapsedMs: res.elapsedMs,
         finishReason: res.finishReason,
       }
-      const botId = await appendMessage(botRow)
-      messages.value.push({ ...botRow, id: botId })
+      const id = await appendMessage(row)
+      messages.value.push({ ...row, id })
+      lastId = id
+    }
 
-      const warn = res.degraded ? ' · ⚠️ 输出退化' : ''
-      // Q2 用量透明化：每轮消耗直接可见（缓存命中单列 —— 它是省钱的关键指标）
-      const u = res.usage
-      const usageStr = u
-        ? ` · ↧${fmtTokens(u.prompt)} ↥${fmtTokens(u.completion)}${u.cacheHit ? `（缓存 ${fmtTokens(u.cacheHit)}）` : ''}`
-        : ''
-      lastMeta.value = `${res.model} · ${(res.elapsedMs / 1000).toFixed(1)}s · ${res.content.length} 字${usageStr}${warn}`
+    const warn = res.degraded ? ' · ⚠️ 输出退化' : ''
+    // Q2 用量透明化：每轮消耗直接可见（缓存命中单列 —— 它是省钱的关键指标）
+    const u = res.usage
+    const usageStr = u
+      ? ` · ↧${fmtTokens(u.prompt)} ↥${fmtTokens(u.completion)}${u.cacheHit ? `（缓存 ${fmtTokens(u.cacheHit)}）` : ''}`
+      : ''
+    const burstStr = burst.length > 1 ? ` · 连发 ${burst.length} 条` : ''
+    lastMeta.value = `${res.model} · ${(res.elapsedMs / 1000).toFixed(1)}s · ${res.content.length} 字${burstStr}${usageStr}${warn}`
+    return lastId
+  }
 
-      // 记忆抽取 + 关系温度（Phase 3）。放最后：抽取失败**不能**影响这轮对话已经成功的事实。
-      const ext = await extractAndStore(input, res.content)
-
-      // ⭐ 快照：只在演化层**真的变了**时才记。
-      //    没变化的一轮是重复点，画在曲线上是噪声；而且「回滚到它」没有意义
-      //    （回滚回去和现在一模一样）。只有真实变化才值得留一帧。
-      const evolvingAfter = JSON.stringify(persona.value.evolving)
-      if (evolvingAfter !== evolvingBefore) {
-        try {
-          await appendSnapshot({
-            personaId: persona.value.id,
-            at: new Date().toISOString(),
-            frozenHash: frozenHash(JSON.stringify(persona.value.frozen)),
-            evolving: persona.value.evolving,
-            triggerSummary: [
-              ext.added > 0 ? `新增 ${ext.added} 条记忆` : '',
-              ext.relChanged
-                ? `亲密度 ${persona.value.evolving.relation.intimacy}（${persona.value.evolving.relation.stage}）`
-                : '',
-            ]
-              .filter(Boolean)
-              .join(' · ') || '演化层更新',
-            messageId: botId,
-          })
-        } catch (e) {
-          // 快照失败同样只进状态栏 —— 它不该抹掉一轮成功的对话
-          memoryMeta.value =
-            (memoryMeta.value ? memoryMeta.value + ' · ' : '') +
-            `⚠️ 快照失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 100)
-        }
-      }
+  /** 快照：只在演化层真的变了时记（原 send 内联逻辑，抽出来复用） */
+  async function maybeSnapshot(
+    evolvingBefore: string,
+    ext: { added: number; relChanged: boolean },
+    messageId: number,
+  ): Promise<void> {
+    const evolvingAfter = JSON.stringify(persona.value.evolving)
+    if (evolvingAfter === evolvingBefore) return
+    try {
+      await appendSnapshot({
+        personaId: persona.value.id,
+        at: new Date().toISOString(),
+        frozenHash: frozenHash(JSON.stringify(persona.value.frozen)),
+        evolving: persona.value.evolving,
+        triggerSummary: [
+          ext.added > 0 ? `新增 ${ext.added} 条记忆` : '',
+          ext.relChanged
+            ? `亲密度 ${persona.value.evolving.relation.intimacy}（${persona.value.evolving.relation.stage}）`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' · ') || '演化层更新',
+        messageId,
+      })
     } catch (e) {
-      error.value = e instanceof ChatError ? e.message : String(e)
+      // 快照失败同样只进状态栏 —— 它不该抹掉一轮成功的对话
+      memoryMeta.value =
+        (memoryMeta.value ? memoryMeta.value + ' · ' : '') +
+        `⚠️ 快照失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 100)
+    }
+  }
+
+  /* ---------- 主动对话（L1 开场白 / L2 沉默触发） ---------- */
+
+  /**
+   * 主动发一条消息。
+   *
+   * 指令放在 user 消息位但**不落库** —— 落了库，下一轮它就在历史里，
+   * 模型会看到「系统让我主动」从而出戏；不落库，历史里只有她的自然发言，
+   * 下一轮模型看到的就是「她自己说过这句话」—— 与真实记忆无缝。
+   *
+   * 失败完全静默：用户没有请求这次生成，弹错误反而是打扰；
+   * console.warn 留排障线索。
+   */
+  async function proactiveReply(kind: 'greet' | 'silence'): Promise<void> {
+    if (streaming.value || conversationId.value === null) return
+    error.value = null
+    streaming.value = true
+    try {
+      const history = toHistory()
+      // 记忆照常注入 —— 主动开口也该记得对方的事（触发词用最近一条用户消息）
+      const recentUser =
+        [...messages.value].reverse().find((m) => m.role === 'user')?.content ?? ''
+      const sel = selectMemories(persona.value.evolving.memories, recentUser)
+      const withMemory: SystemPromptParts = { ...parts.value, memoryBlock: renderMemoryBlock(sel) }
+      const wire = buildMessages(
+        withMemory,
+        history,
+        kind === 'greet' ? GREETING_INSTRUCTION : SILENCE_INSTRUCTION,
+      )
+
+      const res = await sendChat({
+        provider: currentProvider.value,
+        system: wire[0].content,
+        history: wire.slice(1, -1) as TurnMessage[],
+        userInput: wire[wire.length - 1].content,
+      })
+      await deliverBurst(res)
+      memoryMeta.value = kind === 'greet' ? '主动开场' : '主动找你'
+      // 主动发言也是一次「活动」—— 下一次沉默触发从这条算起
+      lastActivityAt.value = Date.now()
+    } catch (e) {
+      console.warn('[proactive] 主动消息生成失败', e)
     } finally {
       streaming.value = false
+    }
+  }
+
+  /** L1：进对话页时判断要不要主动开场（每次进页最多一条） */
+  async function maybeGreet(): Promise<void> {
+    if (!loadProactiveEnabled() || isQuietHour() || streaming.value) return
+    const last = messages.value[messages.value.length - 1]
+    // 空会话也开场（冷启动破冰）；有过对话则要求距上一条超过阈值
+    if (last && Date.now() - last.createdAt < PROACTIVE.GREETING_GAP_MS) return
+    await proactiveReply('greet')
+  }
+
+  /** L2 检查（定时器驱动）：沉默够久、没到止损上限 → 主动说一句 */
+  async function checkSilence(): Promise<void> {
+    if (!loadProactiveEnabled() || isQuietHour()) return
+    if (streaming.value || pendingInputs.value.length) return
+    if (unansweredProactive.value >= PROACTIVE.MAX_UNANSWERED) return
+    if (Date.now() - lastActivityAt.value < PROACTIVE.SILENCE_MS) return
+    await proactiveReply('silence')
+    unansweredProactive.value += 1
+  }
+
+  /** 挂载 L2 定时器（ChatView 进入时调用，离开即停 —— 只在「在场」时主动） */
+  function startProactive(): void {
+    if (proactiveTimer !== null) return
+    proactiveTimer = window.setInterval(() => void checkSilence(), PROACTIVE.CHECK_INTERVAL_MS)
+  }
+
+  function stopProactive(): void {
+    if (proactiveTimer !== null) {
+      clearInterval(proactiveTimer)
+      proactiveTimer = null
     }
   }
 
@@ -306,6 +475,8 @@ export const useChatStore = defineStore('chat', () => {
     await clearConversation(conversationId.value)
     messages.value = []
     lastMeta.value = ''
+    pendingInputs.value = []
+    markUserActivity()
   }
 
 /** token 数缩写：1234 → 1.2k，避免状态栏被长数字撑爆 */
@@ -404,5 +575,9 @@ function fmtTokens(n: number): string {
     usePersona,
     switchTo,
     refreshPersonaList,
+    /** 主动对话（L1/L2）：ChatView 生命周期内挂载与驱动 */
+    maybeGreet,
+    startProactive,
+    stopProactive,
   }
 })

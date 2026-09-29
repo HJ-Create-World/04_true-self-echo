@@ -10,7 +10,7 @@
  *   检测放在组件层（纯 UI 安全提示），不污染 chat store。
  *   🔴 每次命中都显示 —— 安全提示**不做去重**，去重等于漏报。
  */
-import { nextTick, computed, onMounted, ref, watch } from 'vue'
+import { nextTick, computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import MessageBubble from '@/components/MessageBubble.vue'
 import Dropdown, { type DropdownOption } from '@/components/ui/Dropdown.vue'
@@ -48,7 +48,15 @@ onMounted(async () => {
   await chat.init()
   await roster.refresh()
   await scrollToEnd()
+  // 主动对话（2026-09-29 体验迭代）：
+  // - L1 开场白：距上次对话超过阈值（或空会话）→ 她先开口
+  // - L2 沉默触发：本页打开期间定时检查，用户沉默 10min → 她主动说一句
+  //   离开本页即停 —— 只在「在场」时主动，后台不骚扰
+  void chat.maybeGreet()
+  chat.startProactive()
 })
+
+onUnmounted(() => chat.stopProactive())
 
 /** 模型下拉选项（多模型平铺：一个连接拉到 N 个模型 → N 个选项，value 是复合键） */
 const providerOptions = computed<DropdownOption[]>(() =>
@@ -85,10 +93,11 @@ async function scrollToEnd() {
 
 async function submit() {
   const text = draft.value
-  if (!text.trim() || chat.streaming) return
+  if (!text.trim()) return
   if (detectCrisis(text)) crisisShown.value = true
   wellbeing.onMessage()
   draft.value = ''
+  // 生成中不再拦截 —— send() 内部入队（用户连发，AI 回完一起看到）
   await chat.send(text)
 }
 
@@ -197,7 +206,7 @@ async function reset() {
         />
           <button
             type="button"
-            :disabled="chat.streaming || !draft.trim()"
+            :disabled="!draft.trim()"
             class="shrink-0 rounded-full bg-[#4a6fa5] px-5 py-1.5 text-sm text-white shadow-[0_4px_20px_rgba(74,111,165,0.12)] transition-all duration-500 ease-in-out hover:bg-[#4a6fa5]/90 hover:shadow-[0_10px_40px_rgba(74,111,165,0.35)] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
             @click="submit"
           >
