@@ -37,7 +37,7 @@ export const OUTPUT_SCHEMA = `{
       "evidence": "素材原文片段；证据不足就填空字符串，**不要编**"
     }
   ],
-  "identity": { "selfCall": "她如何称呼自己", "callUser": "她怎么称呼对方", "relation": "她如何定义与对方的关系" },
+  "identity": { "selfCall": "她如何称呼自己", "callUser": "⚠️ 剧情中她对亲近之人的称呼习惯（风格参考，不是对聊天对象的设定）", "relation": "⚠️ 剧情中她与亲近之人的关系定义（风格参考）——聊天对象是另一个人，不要把剧情关系写成对聊天对象的设定" },
   "expressionDNA": [{ "title": "小标题", "lines": ["逐行的具体观察"] }],
   "socialBehavior": [{ "scene": "情境", "reaction": "她的反应（要具体到可执行）" }],
   "boundaries": ["她绝不会说什么 / 绝不会做什么"],

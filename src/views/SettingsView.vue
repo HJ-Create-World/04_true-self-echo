@@ -12,7 +12,14 @@
 import { onMounted, ref } from 'vue'
 
 import { fetchProviders, type ChatRequest } from '@/api/chat'
-import { loadProactiveEnabled, saveProactiveEnabled } from '@/core/proactive'
+import {
+  DEFAULT_PROACTIVE,
+  loadProactiveConfig,
+  loadProactiveEnabled,
+  saveProactiveConfig,
+  saveProactiveEnabled,
+  type ProactiveConfig,
+} from '@/core/proactive'
 import type { ProviderInfo } from '@/api/provider'
 import {
   deleteConnection,
@@ -35,6 +42,20 @@ const proactiveOn = ref(loadProactiveEnabled())
 function toggleProactive() {
   proactiveOn.value = !proactiveOn.value
   saveProactiveEnabled(proactiveOn.value)
+}
+
+/** 主动对话参数（HJ 2026-09-29：触发时间与频率开放自定义） */
+const proCfg = ref<ProactiveConfig>(loadProactiveConfig())
+
+function updateProCfg(patch: Partial<ProactiveConfig>) {
+  proCfg.value = { ...proCfg.value, ...patch }
+  saveProactiveConfig(proCfg.value)
+}
+
+/** 恢复保守默认 */
+function resetProCfg() {
+  proCfg.value = { ...DEFAULT_PROACTIVE }
+  saveProactiveConfig(proCfg.value)
 }
 
 const providers = ref<ProviderInfo[]>([])
@@ -508,8 +529,8 @@ async function testCustom() {
         <header class="mb-4">
           <h2 class="m-0 text-base tracking-wide">主动对话</h2>
           <p class="mb-0 mt-1.5 text-xs leading-relaxed tracking-wide text-[#3a3a3a]/50">
-            允许 TA 主动找你说话：隔了半天以上再进来时先开口，或你沉默一阵子时主动聊一句。
-            连续两次没有回应就会停下来；<b>每晚 23:00 – 次日 8:00 恒静音</b>，不受此开关影响。
+            允许 TA 主动找你说话：隔了一段时间再进来时先开口，或你沉默一阵子时主动聊一句。
+            连续几次没有回应就会停下来；<b>每晚 23:00 – 次日 8:00 恒静音</b>，不受任何设置影响。
           </p>
         </header>
         <label class="flex cursor-pointer items-center gap-3 text-sm tracking-wide text-[#3a3a3a]">
@@ -521,6 +542,76 @@ async function testCustom() {
           />
           允许 TA 主动找我（关闭后 TA 只在被回复时说话）
         </label>
+
+        <div v-if="proactiveOn" class="mt-4 space-y-3 border-t border-[#4a6fa5]/10 pt-4">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <label class="min-w-40 text-xs tracking-wide text-[#3a3a3a]/60" for="pro-silence">沉默多久后主动说一句</label>
+            <select
+              id="pro-silence"
+              :value="proCfg.silenceMinutes"
+              class="rounded-xl bg-white/80 px-3 py-1.5 text-xs tracking-wide text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+              @change="updateProCfg({ silenceMinutes: Number(($event.target as HTMLSelectElement).value) })"
+            >
+              <option :value="5">5 分钟</option>
+              <option :value="10">10 分钟（保守）</option>
+              <option :value="20">20 分钟</option>
+              <option :value="30">30 分钟</option>
+              <option :value="60">1 小时</option>
+            </select>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <label class="min-w-40 text-xs tracking-wide text-[#3a3a3a]/60" for="pro-max">连续几次没回应就停下</label>
+            <select
+              id="pro-max"
+              :value="proCfg.maxUnanswered"
+              class="rounded-xl bg-white/80 px-3 py-1.5 text-xs tracking-wide text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+              @change="updateProCfg({ maxUnanswered: Number(($event.target as HTMLSelectElement).value) })"
+            >
+              <option :value="1">1 次</option>
+              <option :value="2">2 次（保守）</option>
+              <option :value="3">3 次</option>
+              <option :value="5">5 次</option>
+            </select>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <label class="min-w-40 text-xs tracking-wide text-[#3a3a3a]/60" for="pro-gap">隔多久没聊，进来时先开口</label>
+            <select
+              id="pro-gap"
+              :value="proCfg.greetingGapHours"
+              class="rounded-xl bg-white/80 px-3 py-1.5 text-xs tracking-wide text-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+              @change="updateProCfg({ greetingGapHours: Number(($event.target as HTMLSelectElement).value) })"
+            >
+              <option :value="1">1 小时</option>
+              <option :value="3">3 小时</option>
+              <option :value="6">6 小时（保守）</option>
+              <option :value="12">半天</option>
+              <option :value="24">一天</option>
+              <option :value="48">两天</option>
+            </select>
+          </div>
+
+          <label class="flex cursor-pointer items-center gap-3 text-sm tracking-wide text-[#3a3a3a]">
+            <input
+              type="checkbox"
+              :checked="proCfg.monologuePrefix"
+              class="h-4 w-4 accent-[#4a6fa5]"
+              @change="updateProCfg({ monologuePrefix: !proCfg.monologuePrefix })"
+            />
+            TA 主动说话时，附带一句内心独白（「她心想：……」；每次主动会多一次模型调用）
+          </label>
+
+          <div class="pt-1">
+            <button
+              type="button"
+              class="rounded-full bg-white/60 px-4 py-1.5 text-xs tracking-wide text-[#3a3a3a]/55 transition-all duration-500 ease-in-out hover:bg-white/85 active:scale-[0.98]"
+              @click="resetProCfg"
+            >
+              恢复默认参数
+            </button>
+          </div>
+        </div>
       </section>
     </main>
   </div>

@@ -24,8 +24,10 @@ import {
   PROACTIVE,
   SILENCE_INSTRUCTION,
   isQuietHour,
+  loadProactiveConfig,
   loadProactiveEnabled,
 } from '@/core/proactive'
+import { generateMonologue } from '@/persona/monologue'
 import type { SystemPromptParts, TurnMessage } from '@/core/prompt'
 import { buildMessages, trimHistory } from '@/core/prompt'
 import { renderMemoryBlock } from '@/memory/inject'
@@ -289,7 +291,7 @@ export const useChatStore = defineStore('chat', () => {
       // 人格正文用缓存好的 parts；**记忆区是每轮现算的** ——
       // 它依赖本轮输入（关键词触发），所以不能进缓存。
       const sel = selectMemories(persona.value.evolving.memories, merged)
-      const withMemory: SystemPromptParts = { ...parts.value, memoryBlock: renderMemoryBlock(sel) }
+      const withMemory: SystemPromptParts = { ...parts.value, memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation) }
       memoryMeta.value = sel.pinned.length + sel.triggered.length
         ? `记忆 ${sel.pinned.length}+${sel.triggered.length} 条`
         : ''
@@ -408,18 +410,26 @@ export const useChatStore = defineStore('chat', () => {
     if (streaming.value || conversationId.value === null) return
     error.value = null
     streaming.value = true
+    monologueEcho.value = ''
     try {
       const history = toHistory()
       // 记忆照常注入 —— 主动开口也该记得对方的事（触发词用最近一条用户消息）
       const recentUser =
         [...messages.value].reverse().find((m) => m.role === 'user')?.content ?? ''
       const sel = selectMemories(persona.value.evolving.memories, recentUser)
-      const withMemory: SystemPromptParts = { ...parts.value, memoryBlock: renderMemoryBlock(sel) }
+      const withMemory: SystemPromptParts = { ...parts.value, memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation) }
       const wire = buildMessages(
         withMemory,
         history,
         kind === 'greet' ? GREETING_INSTRUCTION : SILENCE_INSTRUCTION,
       )
+
+      // 独白前缀（HJ 2026-09-29 拍板：可开关，默认关）——
+      // 与消息生成**并行**发出，不增加总等待；失败静默（独白本来就是即抛即用）
+      const cfg = loadProactiveConfig()
+      const monologuePromise = cfg.monologuePrefix
+        ? generateMonologue(parts.value, history.slice(-4), currentProvider.value).catch(() => null)
+        : null
 
       const res = await sendChat({
         provider: currentProvider.value,
@@ -427,6 +437,13 @@ export const useChatStore = defineStore('chat', () => {
         history: wire.slice(1, -1) as TurnMessage[],
         userInput: wire[wire.length - 1].content,
       })
+
+      if (monologuePromise) {
+        const mono = await monologuePromise
+        // 独白不落库（monologue.ts 的设计决定：她没说出口的话），只在本次展示
+        if (mono?.text) monologueEcho.value = mono.text
+      }
+
       await deliverBurst(res)
       memoryMeta.value = kind === 'greet' ? '主动开场' : '主动找你'
       // 主动发言也是一次「活动」—— 下一次沉默触发从这条算起
@@ -438,12 +455,18 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /** 主动消息附带的内心独白（即抛即用，不落库；UI 显示在她气泡上方） */
+  const monologueEcho = ref('')
+  function clearMonologueEcho(): void {
+    monologueEcho.value = ''
+  }
+
   /** L1：进对话页时判断要不要主动开场（每次进页最多一条） */
   async function maybeGreet(): Promise<void> {
     if (!loadProactiveEnabled() || isQuietHour() || streaming.value) return
     const last = messages.value[messages.value.length - 1]
     // 空会话也开场（冷启动破冰）；有过对话则要求距上一条超过阈值
-    if (last && Date.now() - last.createdAt < PROACTIVE.GREETING_GAP_MS) return
+    if (last && Date.now() - last.createdAt < loadProactiveConfig().greetingGapHours * 3_600_000) return
     await proactiveReply('greet')
   }
 
@@ -451,8 +474,9 @@ export const useChatStore = defineStore('chat', () => {
   async function checkSilence(): Promise<void> {
     if (!loadProactiveEnabled() || isQuietHour()) return
     if (streaming.value || pendingInputs.value.length) return
-    if (unansweredProactive.value >= PROACTIVE.MAX_UNANSWERED) return
-    if (Date.now() - lastActivityAt.value < PROACTIVE.SILENCE_MS) return
+    const cfg = loadProactiveConfig()
+    if (unansweredProactive.value >= cfg.maxUnanswered) return
+    if (Date.now() - lastActivityAt.value < cfg.silenceMinutes * 60_000) return
     await proactiveReply('silence')
     unansweredProactive.value += 1
   }
@@ -579,5 +603,8 @@ function fmtTokens(n: number): string {
     maybeGreet,
     startProactive,
     stopProactive,
+    /** 主动消息附带的内心独白（即抛即用）与清除 */
+    monologueEcho,
+    clearMonologueEcho,
   }
 })

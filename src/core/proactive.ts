@@ -23,31 +23,72 @@
  */
 
 export const PROACTIVE = {
-  /** L1：距上一条消息超过这个时长，进页时主动开场 */
-  GREETING_GAP_MS: 6 * 60 * 60 * 1000,
-  /** L2：用户沉默多久后主动说一句 */
-  SILENCE_MS: 10 * 60 * 1000,
-  /** L2：连续主动多少次没有回应就停（防骚扰止损） */
-  MAX_UNANSWERED: 2,
-  /** L2 静音时段：[23:00, 8:00) 不触发 */
-  QUIET_START_HOUR: 23,
-  QUIET_END_HOUR: 8,
-  /** L2 检查周期 */
+  /** L2 检查周期（内部实现，不开放） */
   CHECK_INTERVAL_MS: 30 * 1000,
 } as const
+
+/** L2 静音时段：[23:00, 8:00) 不触发 —— 合规红线（对齐 R2），不开放配置 */
+export const QUIET_HOURS = { START: 23, END: 8 } as const
 
 /** 是否处于夜间静音时段 */
 export function isQuietHour(now = new Date()): boolean {
   const h = now.getHours()
-  return h >= PROACTIVE.QUIET_START_HOUR || h < PROACTIVE.QUIET_END_HOUR
+  return h >= QUIET_HOURS.START || h < QUIET_HOURS.END
 }
 
-const SETTING_KEY = 'tse_proactive_enabled'
+/* ------------------------------------------------------------------ */
+/* 用户可调参数（HJ 2026-09-29 拍板：触发时间与频率开放自定义）           */
+/* ------------------------------------------------------------------ */
+
+export interface ProactiveConfig {
+  /** L2：用户沉默多少分钟后主动说一句（默认 10） */
+  silenceMinutes: number
+  /** L2：连续几次无回应后停止（默认 2） */
+  maxUnanswered: number
+  /** L1：距上次对话多少小时后进页开场（默认 6） */
+  greetingGapHours: number
+  /** 主动消息是否带内心独白前缀（默认关 —— 用户要开启时再开启） */
+  monologuePrefix: boolean
+}
+
+export const DEFAULT_PROACTIVE: ProactiveConfig = {
+  silenceMinutes: 10,
+  maxUnanswered: 2,
+  greetingGapHours: 6,
+  monologuePrefix: false,
+}
+
+/** 参数边界：防手滑填出 0 分钟刷屏或 999 小时永不触发 */
+const LIMITS = {
+  silenceMinutes: { min: 2, max: 120 },
+  maxUnanswered: { min: 1, max: 10 },
+  greetingGapHours: { min: 1, max: 168 },
+} as const
+
+function clamp(v: unknown, def: number, min: number, max: number): number {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return def
+  return Math.min(max, Math.max(min, Math.round(n)))
+}
+
+export function sanitizeProactiveConfig(v: Partial<ProactiveConfig> | null): ProactiveConfig {
+  const d = DEFAULT_PROACTIVE
+  if (!v || typeof v !== 'object') return { ...d }
+  return {
+    silenceMinutes: clamp(v.silenceMinutes, d.silenceMinutes, LIMITS.silenceMinutes.min, LIMITS.silenceMinutes.max),
+    maxUnanswered: clamp(v.maxUnanswered, d.maxUnanswered, LIMITS.maxUnanswered.min, LIMITS.maxUnanswered.max),
+    greetingGapHours: clamp(v.greetingGapHours, d.greetingGapHours, LIMITS.greetingGapHours.min, LIMITS.greetingGapHours.max),
+    monologuePrefix: v.monologuePrefix === true,
+  }
+}
+
+const ENABLED_KEY = 'tse_proactive_enabled'
+const CONFIG_KEY = 'tse_proactive_config'
 
 /** 主动对话总开关（L1+L2 共用），默认开 —— HJ 拍板的保守默认 */
 export function loadProactiveEnabled(): boolean {
   try {
-    return localStorage.getItem(SETTING_KEY) !== '0'
+    return localStorage.getItem(ENABLED_KEY) !== '0'
   } catch {
     return true
   }
@@ -55,9 +96,26 @@ export function loadProactiveEnabled(): boolean {
 
 export function saveProactiveEnabled(v: boolean): void {
   try {
-    localStorage.setItem(SETTING_KEY, v ? '1' : '0')
+    localStorage.setItem(ENABLED_KEY, v ? '1' : '0')
   } catch {
     /* 存不了就保持内存态，下次进来回到默认 */
+  }
+}
+
+export function loadProactiveConfig(): ProactiveConfig {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY)
+    return sanitizeProactiveConfig(raw ? JSON.parse(raw) : null)
+  } catch {
+    return { ...DEFAULT_PROACTIVE }
+  }
+}
+
+export function saveProactiveConfig(cfg: ProactiveConfig): void {
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(sanitizeProactiveConfig(cfg)))
+  } catch {
+    /* 同上 */
   }
 }
 
