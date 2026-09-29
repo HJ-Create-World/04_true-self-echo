@@ -2,7 +2,7 @@
 title: INDEX · 文档登记表
 type: index
 status: active
-updated: 2026-09-18
+updated: 2026-09-29
 owner: HJ
 ---
 
@@ -52,6 +52,7 @@ owner: HJ
 | `D009-原型定版与背景切换机制.md` | active | 原型 v0.2 定版；背景色域靠「色相+分布+混合模式」而非提高 opacity |
 | `D010-项目命名.md` | active | 项目定名「真我回响」；含命名方法论与「真我」占用风险记录 |
 | `D011-主基座与开销纪律.md` | active | **主基座 = DeepSeek V4.1-Flash**；GLM 免费层调 prompt；三条开销纪律；换模型=改 `.env` 三行 |
+| `D012-对话体验迭代.md` | active | 连发消息（空行拆条）+ 主动对话三级（prompt 策略 / 开场白 / 沉默触发）；触发参数、静音时段、隐藏指令不落库的设计依据 |
 
 ### 📁 `03_specs/` — 技术规范（回答"怎么做"）
 | 文件 | status | 用途 |
