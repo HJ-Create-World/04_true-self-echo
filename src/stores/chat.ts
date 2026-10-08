@@ -28,6 +28,7 @@ import {
   loadProactiveEnabled,
 } from '@/core/proactive'
 import { renderRealityBlock } from '@/core/reality'
+import { loadSearchEnabled, loadSearchKey, renderSearchBlock, searchReality, shouldSearch } from '@/core/search'
 import type { SystemPromptParts, TurnMessage } from '@/core/prompt'
 import { buildMessages, trimHistory } from '@/core/prompt'
 import { renderMemoryBlock } from '@/memory/inject'
@@ -293,9 +294,22 @@ export const useChatStore = defineStore('chat', () => {
       // 人格正文用缓存好的 parts；**记忆区是每轮现算的** ——
       // 它依赖本轮输入（关键词触发），所以不能进缓存。
       const sel = selectMemories(persona.value.evolving.memories, merged)
+
+      // 现实话题搜索（D016）：预筛命中且配了 key 才搜 —— 不命中零延迟；
+      // 搜索失败静默降级（世界动态/模型知识兜底），绝不报错打断聊天
+      const searchKey = loadSearchEnabled() ? loadSearchKey() : ''
+      let searchBlock = ''
+      if (searchKey && shouldSearch(merged)) {
+        const hits = await searchReality(merged, searchKey)
+        searchBlock = renderSearchBlock(merged, hits)
+        if (hits.length) {
+          memoryMeta.value = `查了点资料 · ${hits.length} 条`
+        }
+      }
+
       const withMemory: SystemPromptParts = {
         ...parts.value,
-        realityBlock: await renderRealityBlock(),
+        realityBlock: [await renderRealityBlock(), searchBlock].filter(Boolean).join('\n\n'),
         memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation, { mood: persona.value.evolving.mood, loops: persona.value.evolving.loops }),
       }
       memoryMeta.value = sel.pinned.length + sel.triggered.length

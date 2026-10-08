@@ -34,6 +34,7 @@ import {
 } from '@/api/apiConfig'
 import { useChatStore } from '@/stores/chat'
 import { loadWeatherCity, loadWorldNotes, saveWeatherCity, saveWorldNotes } from '@/core/reality'
+import { loadSearchEnabled, loadSearchKey, saveSearchEnabled, saveSearchKey } from '@/core/search'
 
 const chat = useChatStore()
 
@@ -72,7 +73,20 @@ const worldNotes = ref(loadWorldNotes())
 
 function saveWorld() {
   saveWorldNotes(worldNotes.value)
-  notice.value = '已更新 —— 她接下来的对话里会带着这些「最近刷到过的事」'
+  notice.value = '已更新 —— 她接下来的对话里会带着这些「最近了解到的事」'
+}
+
+/** 现实话题搜索（可选 key）：命中话题词时搜一次，让她真的知道用户在聊什么 */
+const searchOn = ref(loadSearchEnabled())
+const searchKey = ref(loadSearchKey())
+
+function saveSearch() {
+  saveSearchKey(searchKey.value)
+  saveSearchEnabled(searchOn.value && searchKey.value.trim() !== '')
+  notice.value =
+    searchOn.value && searchKey.value.trim()
+      ? '已开启 —— 她聊到新闻、新品这类话题时会先查一下再说（每次多等两三秒）'
+      : '已关闭或未填 key —— 她靠世界动态和自己的知识聊天'
 }
 
 const providers = ref<ProviderInfo[]>([])
@@ -586,6 +600,38 @@ async function testCustom() {
           >
             保存
           </button>
+        </div>
+
+        <div class="mt-4 border-t border-[#4a6fa5]/10 pt-4">
+          <label class="mb-1.5 flex cursor-pointer items-center gap-3 text-sm tracking-wide text-[#3a3a3a]">
+            <input
+              type="checkbox"
+              v-model="searchOn"
+              class="h-4 w-4 accent-[#4a6fa5]"
+            />
+            现实话题搜索（聊到新闻、新品、热点时她先查一下再说，需要多等两三秒）
+          </label>
+          <div v-if="searchOn" class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <label class="text-xs tracking-wide text-[#3a3a3a]/60" for="search-key">Tavily API Key</label>
+            <input
+              id="search-key"
+              v-model="searchKey"
+              type="password"
+              placeholder="tavily.com 免费注册，每月 1000 次免费"
+              autocomplete="off"
+              class="w-64 rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+            />
+            <button
+              type="button"
+              class="rounded-full bg-[#4a6fa5] px-4 py-1.5 text-xs tracking-wide text-white transition-all duration-500 ease-in-out hover:opacity-90 active:scale-[0.98]"
+              @click="saveSearch"
+            >
+              保存
+            </button>
+          </div>
+          <p class="mb-0 mt-2 text-xs leading-relaxed tracking-wide text-[#3a3a3a]/45">
+            不填 key 则此功能不存在，她靠上面的世界动态和自己的知识聊天。key 只存本机浏览器。
+          </p>
         </div>
       </section>
 

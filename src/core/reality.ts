@@ -68,7 +68,7 @@ export function saveWorldNotes(text: string): void {
   }
 }
 
-/** 把用户贴的动态渲染成「她的信息状态」—— 真人式：看过、听说过，不一定细看 */
+/** 把用户贴的动态渲染成「她真实知道的事」—— 贴多详细她就知道多详细 */
 function renderWorldLine(): string {
   const raw = loadWorldNotes()
   if (!raw.trim()) return ''
@@ -76,12 +76,12 @@ function renderWorldLine(): string {
     .split('\n')
     .map((s) => s.trim().replace(/^[-•\d.、\s]+/, ''))
     .filter(Boolean)
-    .slice(0, 10)
+    .slice(0, 12)
   if (items.length === 0) return ''
   return [
-    '最近你刷到过、听说过这些（都是大概印象，没细看的话就照实说没细看）：',
+    '这些是你最近了解到的事（你的真实见闻，大方聊，可以补充细节和看法）：',
     ...items.map((s) => `- ${s}`),
-    '聊到这些话题时可以自然接话，像朋友间闲聊热点那样；不确定细节就承认不确定。',
+    '聊到这些话题像朋友间聊热点一样自然；条目里没有的细节不要编。',
     '',
   ].join('\n')
 }
