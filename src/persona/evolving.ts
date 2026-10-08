@@ -77,6 +77,39 @@ export interface EvolvingLayer {
   userModel: UserFact[]
   relation: RelationState
   memories: MemoryCard[]
+  /**
+   * 她此刻的心情（2026-10-08 陪伴感切片 1）。
+   * ⚠️ 不是人格（frozen 管「她是什么样」），是**临时的情绪状态**——
+   * 会随对话变化、有惯性（intensity 1 不切换）。老档案没有此字段，读取时兜底。
+   */
+  mood?: Mood
+  /** 未闭环话题（切片 2 · open loops）：问过没答的 / 约好的 / 说要跟进的 */
+  loops?: LoopItem[]
+}
+
+/** 她此刻的心情 —— 「人的温度」的第一块地基 */
+export interface Mood {
+  /** 一两个词：惦记 / 雀跃 / 平静 / 有点低落（不拘词表，但要口语） */
+  label: string
+  /** 1 = 微弱（不切换当前情绪）· 2 = 明显 · 3 = 强烈 */
+  intensity: 1 | 2 | 3
+  /** 从什么时候开始（ISO）—— 情绪要能「持续一段时间」才有人的感觉 */
+  since: string
+  /** 一句话：因为什么 */
+  reason: string
+}
+
+/** 未闭环话题 —— 真人朋友记得你们没聊完的话 */
+export interface LoopItem {
+  id: string
+  /** 她问过但没被回答的问题 / 两人的约定 / TA 说要跟进的事 */
+  kind: 'question' | 'promise' | 'followup'
+  content: string
+  createdAt: string
+  /** 被主动提起过几次 —— 同一条最多主动提 1 次（防翻旧账式骚扰） */
+  raisedCount: number
+  /** 已闭环（用户回应了 / 用户手动关闭）—— closed 的不再注入 */
+  closed: boolean
 }
 
 /* ------------------------------------------------------------------ */
@@ -88,6 +121,20 @@ export function emptyEvolving(): EvolvingLayer {
     userModel: [],
     relation: { stage: '初识', intimacy: 0, sharedEvents: [] },
     memories: [],
+    mood: undefined,
+    loops: [],
+  }
+}
+
+/**
+ * 老档案兜底 —— mood/loops 是后来加的字段，IndexedDB 里存的旧演化层没有。
+ * 在「读取人格进 store」的入口调用一次，之后所有代码都可以放心访问。
+ */
+export function normalizeEvolving(ev: EvolvingLayer): EvolvingLayer {
+  return {
+    ...ev,
+    mood: ev.mood ?? undefined,
+    loops: Array.isArray(ev.loops) ? ev.loops : [],
   }
 }
 

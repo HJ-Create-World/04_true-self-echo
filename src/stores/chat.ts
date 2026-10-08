@@ -32,7 +32,7 @@ import type { SystemPromptParts, TurnMessage } from '@/core/prompt'
 import { buildMessages, trimHistory } from '@/core/prompt'
 import { renderMemoryBlock } from '@/memory/inject'
 import { extractMemories, mergeExtracted, shouldExtract } from '@/memory/extract'
-import { selectMemories } from '@/persona/evolving'
+import { selectMemories, normalizeEvolving } from '@/persona/evolving'
 import { applyRelationUpdate } from '@/persona/relation'
 import { ELYSIA_PROFILE } from '@/persona/elysia'
 import { buildPromptParts } from '@/persona/render'
@@ -192,7 +192,8 @@ export const useChatStore = defineStore('chat', () => {
 
       // 首次进应用：用最近更新过的那份档案兜底；空库时写入内置人格。
       // 之后的显式切换只能走 switchTo() —— 这是 Phase 4 定下的规则。
-      persona.value = (await latestPersona()) ?? (await seedIfEmpty(ELYSIA_PROFILE))
+      const seedOrLatest = (await latestPersona()) ?? (await seedIfEmpty(ELYSIA_PROFILE))
+      persona.value = { ...seedOrLatest, evolving: normalizeEvolving(seedOrLatest.evolving) }
       parts.value = buildPromptParts(persona.value)
       await refreshPersonaList()
       initialized.value = true
@@ -211,8 +212,9 @@ export const useChatStore = defineStore('chat', () => {
 
   /** 切换到另一个人格（投料完成 / 手动切换都会走这里） */
   async function usePersona(next: PersonaProfile) {
-    persona.value = next
-    parts.value = buildPromptParts(next)
+    // 老档案兜底：mood/loops 是后来加的字段，旧数据里没有 —— 进 store 前补齐
+    persona.value = { ...next, evolving: normalizeEvolving(next.evolving) }
+    parts.value = buildPromptParts(persona.value)
     // 显式选定过人格之后，后续的 init 不许再自动改选（见 initialized 的注释）
     initialized.value = true
     lastMeta.value = ''
@@ -294,7 +296,7 @@ export const useChatStore = defineStore('chat', () => {
       const withMemory: SystemPromptParts = {
         ...parts.value,
         realityBlock: await renderRealityBlock(),
-        memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation),
+        memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation, { mood: persona.value.evolving.mood, loops: persona.value.evolving.loops }),
       }
       memoryMeta.value = sel.pinned.length + sel.triggered.length
         ? `记忆 ${sel.pinned.length}+${sel.triggered.length} 条`
@@ -429,13 +431,20 @@ export const useChatStore = defineStore('chat', () => {
       const withMemory: SystemPromptParts = {
         ...parts.value,
         realityBlock: await renderRealityBlock(),
-        memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation),
+        memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation, { mood: persona.value.evolving.mood, loops: persona.value.evolving.loops }),
       }
-      const wire = buildMessages(
-        withMemory,
-        history,
-        kind === 'greet' ? GREETING_INSTRUCTION : SILENCE_INSTRUCTION,
-      )
+
+      // 🔴 loops 优先消费（切片 2）：有没聊完的话，主动消息就从它接起 ——
+      // 「你上次说的面试怎么样了」远胜于泛泛的「在干嘛」。
+      // 只挑没被主动提过的（raisedCount 0），提一条就 +1 落库（防翻旧账）。
+      const freshLoops = (persona.value.evolving.loops ?? []).filter((l) => !l.closed && l.raisedCount === 0)
+      const loopsForInstruction = freshLoops.slice(0, 3)
+      const base = kind === 'greet' ? GREETING_INSTRUCTION : SILENCE_INSTRUCTION
+      const instruction = loopsForInstruction.length
+        ? `${base}\n\n（你们之间还有一些没聊完的话，必要时从其中**一件**自然接起，不要一次全提：\n${loopsForInstruction.map((l) => `- ${l.content}`).join('\n')}）`
+        : base
+
+      const wire = buildMessages(withMemory, history, instruction)
 
       const res = await sendChat({
         provider: currentProvider.value,
@@ -443,6 +452,20 @@ export const useChatStore = defineStore('chat', () => {
         history: wire.slice(1, -1) as TurnMessage[],
         userInput: wire[wire.length - 1].content,
       })
+
+      // 消费记录落库（失败只进 console —— 主动消息本身已成功，别为计数器报错）
+      if (loopsForInstruction.length) {
+        const raised = new Set(loopsForInstruction.map((l) => l.id))
+        persona.value.evolving = {
+          ...persona.value.evolving,
+          loops: (persona.value.evolving.loops ?? []).map((l) =>
+            raised.has(l.id) ? { ...l, raisedCount: l.raisedCount + 1 } : l,
+          ),
+        }
+        void saveEvolving(persona.value.id, persona.value.evolving).catch((e) =>
+          console.warn('[proactive] loops 计数落库失败', e),
+        )
+      }
 
       // 独白走同一条内联解析（deliverBurst），不再单独调模型 —— 省一次调用
       await deliverBurst(res)
@@ -524,7 +547,13 @@ function fmtTokens(n: number): string {
       return { added: 0, relChanged: false }
     }
     try {
-      const res = await extractMemories(currentProvider.value, userInput, assistantReply)
+      const openLoops = (persona.value.evolving.loops ?? []).filter((l) => !l.closed)
+      const res = await extractMemories(
+        currentProvider.value,
+        userInput,
+        assistantReply,
+        openLoops.map((l) => ({ id: l.id, content: l.content })),
+      )
       if (res.parseError) {
         memoryMeta.value = `⚠️ 记忆抽取失败：${res.parseError.slice(0, 60)}`
         return { added: 0, relChanged: false }
@@ -533,6 +562,7 @@ function fmtTokens(n: number): string {
       // 关系推进与记忆共用同一份演化层。
       // 🔴 cards 为 0 也**不能提前返回** —— 聊了心事但「没有可记事实」的一轮，
       //    关系照样该推进；提前返回会让亲密度在整段走心对话里纹丝不动。
+      //    情绪与 loops 同理：没有新记忆的一轮也可能带来心情变化、话题闭环。
       const withRelation = applyRelationUpdate(persona.value.evolving, res.relation)
       const relChanged = withRelation !== persona.value.evolving
       const before = withRelation.memories.length
@@ -541,12 +571,64 @@ function fmtTokens(n: number): string {
       )
       const gained = next.length - before
 
-      if (gained === 0 && !relChanged) {
+      // ---- 心情（切片 1）：带惯性 —— intensity 1 的淡情绪不切换当前状态 ----
+      let moodChanged = false
+      let nextMood = withRelation.mood
+      if (res.mood) {
+        const cur = withRelation.mood
+        const same = cur && cur.label === res.mood.label
+        if (!same && res.mood.intensity === 1) {
+          // 淡的情绪不够推翻现状 —— 但如果现在没有情绪，淡的也可以是起点
+          if (!cur?.label) {
+            nextMood = { ...res.mood, since: new Date().toISOString() }
+            moodChanged = true
+          }
+        } else if (!same) {
+          nextMood = { ...res.mood, since: new Date().toISOString() }
+          moodChanged = true
+        }
+      }
+
+      // ---- 未聊完的话（切片 2）：新增 + 闭环 ----
+      const nowIso = new Date().toISOString()
+      let nextLoops = withRelation.loops ?? []
+      let loopChanged = false
+
+      // 闭环：本轮对话了结的旧话题
+      if (res.closedLoopIds.length) {
+        const closedSet = new Set(res.closedLoopIds)
+        nextLoops = nextLoops.map((l) => (closedSet.has(l.id) && !l.closed ? { ...l, closed: true } : l))
+        if (nextLoops.some((l) => l.closed)) loopChanged = true
+      }
+      // 新增：与现有内容去重（规范化比较），上限 20 条（closed 的先淘汰）
+      for (const nl of res.openLoops) {
+        const key = nl.content.replace(/[\s，。、,.!！？?]/g, '')
+        if (nextLoops.some((l) => l.content.replace(/[\s，。、,.!！？?]/g, '') === key)) continue
+        nextLoops = [
+          ...nextLoops.filter((l) => !l.closed).slice(-19),
+          {
+            id: `lp${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+            kind: nl.kind,
+            content: nl.content,
+            createdAt: nowIso,
+            raisedCount: 0,
+            closed: false,
+          },
+        ]
+        loopChanged = true
+      }
+
+      if (gained === 0 && !relChanged && !moodChanged && !loopChanged) {
         memoryMeta.value = `记忆 +0（没有值得记的）`
         return { added: 0, relChanged: false }
       }
 
-      persona.value.evolving = { ...withRelation, memories: next }
+      persona.value.evolving = {
+        ...withRelation,
+        memories: next,
+        mood: nextMood,
+        loops: nextLoops,
+      }
       await saveEvolving(persona.value.id, persona.value.evolving)
 
       // 抽到的条数可能多于净增数 —— 重复的会被去重合并掉
@@ -555,6 +637,8 @@ function fmtTokens(n: number): string {
         const rel = persona.value.evolving.relation
         parts.push(`亲密度 ${rel.intimacy} · ${rel.stage}`)
       }
+      if (moodChanged) parts.push(`心情：${nextMood?.label ?? ''}`)
+      if (loopChanged) parts.push(`未聊完的话题 ${nextLoops.filter((l) => !l.closed).length} 条`)
       memoryMeta.value = parts.join(' · ')
       return { added: gained, relChanged }
     } catch (e) {

@@ -38,6 +38,54 @@ export function saveWeatherCity(city: string): void {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* 世界动态（共享语境 · 手动层）                                        */
+/* ------------------------------------------------------------------ */
+
+export const WORLD_NOTES_KEY = 'tse_world_notes'
+
+/**
+ * 「最近的世界」—— 用户手动维护的几条动态（热点 / 新品 / 身边的事）。
+ *
+ * 为什么先做手动层（HJ 2026-10-08 重新评估）：她听不懂「最近的新闻」的根因
+ * 不是缺搜索，是**没有共同语境**。用户本来就在刷手机，顺手贴几条的成本
+ * 远低于配一个搜索 API 的 key；内容完全可控（无审核风险）；零依赖。
+ * 自动层（RSS）与搜索层（可选 key）留作后续升级，见 D015。
+ */
+export function loadWorldNotes(): string {
+  try {
+    return localStorage.getItem(WORLD_NOTES_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function saveWorldNotes(text: string): void {
+  try {
+    localStorage.setItem(WORLD_NOTES_KEY, text.trim().slice(0, 2000))
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 把用户贴的动态渲染成「她的信息状态」—— 真人式：看过、听说过，不一定细看 */
+function renderWorldLine(): string {
+  const raw = loadWorldNotes()
+  if (!raw.trim()) return ''
+  const items = raw
+    .split('\n')
+    .map((s) => s.trim().replace(/^[-•\d.、\s]+/, ''))
+    .filter(Boolean)
+    .slice(0, 10)
+  if (items.length === 0) return ''
+  return [
+    '最近你刷到过、听说过这些（都是大概印象，没细看的话就照实说没细看）：',
+    ...items.map((s) => `- ${s}`),
+    '聊到这些话题时可以自然接话，像朋友间闲聊热点那样；不确定细节就承认不确定。',
+    '',
+  ].join('\n')
+}
+
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
 function periodOf(h: number): string {
@@ -134,16 +182,18 @@ export async function fetchWeatherLine(city: string): Promise<string> {
 }
 
 /**
- * 组装现实区（每轮现算，时间恒有，天气尽力）。
+ * 组装现实区（每轮现算，时间恒有，天气与世界动态尽力）。
  * 时间是「她的世界现在几点」的底线 —— 没有它，星期/日期类对话必然露馅。
  */
 export async function renderRealityBlock(now = new Date()): Promise<string> {
   const time = renderTimeLine(now)
   const weather = await fetchWeatherLine(loadWeatherCity())
+  const world = renderWorldLine()
   return [
     '## 现在的世界',
     '',
     time,
     ...(weather ? [weather, '聊到天气、出门、穿搭这类话题时，以这里的实际情况为准。'] : []),
+    ...(world ? ['', world] : []),
   ].join('\n')
 }

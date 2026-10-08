@@ -9,9 +9,15 @@
  * 那会诱导模型对着「什么都没有的记忆」编内容。
  */
 
-import { MEMORY_KIND_LABEL, type MemoryCard, type MemorySelection } from '@/persona/evolving'
+import {
+  MEMORY_KIND_LABEL,
+  type LoopItem,
+  type MemoryCard,
+  type MemorySelection,
+  type Mood,
+  type RelationState,
+} from '@/persona/evolving'
 import { RELATION_STAGE_NOTE } from '@/core/constraints'
-import type { RelationState } from '@/persona/evolving'
 
 /** 单条卡片的行格式：`- 类型：内容` */
 function renderCard(m: MemoryCard): string {
@@ -33,13 +39,55 @@ function renderRelationLine(rel: RelationState): string {
 }
 
 /**
+ * 心情行 —— 情绪要「自然融进语气」而不是被宣布。
+ * 惯性判断在消费侧（chat store），这里只负责渲染当前状态。
+ */
+function renderMoodLine(mood: Mood | undefined): string {
+  if (!mood?.label) return ''
+  return [
+    `**你现在的心情**：${mood.label}（因为${mood.reason || '说不上来的什么'}）。`,
+    '让这个心情自然地融进接下来要说的话里 —— 不用宣布它，也别假装没有。',
+    '',
+  ].join('\n')
+}
+
+/**
+ * 未聊完的话题 —— 只注入 open 且没被主动提过的前 3 条。
+ * closed 的不注入；已在主动消息里提过的（raisedCount ≥ 1）不再进常规注入
+ * （防止她反复念叨同一件事 —— 翻旧账是人机感的重灾区）。
+ */
+function renderLoopsBlock(loops: LoopItem[] | undefined): string {
+  const open = (loops ?? []).filter((l) => !l.closed && l.raisedCount === 0).slice(0, 3)
+  if (open.length === 0) return ''
+  const lines = open.map((l) => {
+    const kindLabel =
+      l.kind === 'question'
+        ? '你问过、TA 还没正面回答'
+        : l.kind === 'promise'
+          ? '你们说好的'
+          : 'TA 提过、会有后续的'
+    return `- ${kindLabel}：${l.content}`
+  })
+  return [
+    '**还没聊完的话**（合适的时候自然提起，别一次全倒出来）：',
+    '',
+    ...lines,
+    '',
+  ].join('\n')
+}
+
+/**
  * 渲染记忆区。
  *
  * 去重是必须的：常驻区与触发区**可能选中同一张卡片**
  * （一张重要度高的卡片既进常驻又命中关键词），重复注入只会浪费上下文、
  * 还会让模型以为这事特别重要。
  */
-export function renderMemoryBlock(sel: MemorySelection, relation?: RelationState): string {
+export function renderMemoryBlock(
+  sel: MemorySelection,
+  relation?: RelationState,
+  extra?: { mood?: Mood; loops?: LoopItem[] },
+): string {
   const merged: MemoryCard[] = []
   const seen = new Set<string>()
   for (const m of [...sel.pinned, ...sel.triggered]) {
@@ -49,7 +97,9 @@ export function renderMemoryBlock(sel: MemorySelection, relation?: RelationState
   }
 
   const relationPart = relation ? renderRelationLine(relation) : ''
-  if (merged.length === 0 && !relationPart) return ''
+  const moodPart = extra ? renderMoodLine(extra.mood) : ''
+  const loopsPart = extra ? renderLoopsBlock(extra.loops) : ''
+  if (merged.length === 0 && !relationPart && !moodPart && !loopsPart) return ''
 
   const cardPart =
     merged.length > 0
@@ -66,6 +116,8 @@ export function renderMemoryBlock(sel: MemorySelection, relation?: RelationState
     '## 关于对方与你们的关系',
     '',
     relationPart,
+    moodPart,
+    loopsPart,
     ...cardPart,
   ]
     .filter(Boolean)

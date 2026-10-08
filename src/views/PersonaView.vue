@@ -13,6 +13,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import EvolutionCurve from '@/components/persona/EvolutionCurve.vue'
 import DataRightsPanel from '@/components/persona/DataRightsPanel.vue'
+import IdentityEditor from '@/components/persona/IdentityEditor.vue'
 import MemoryTimeline from '@/components/persona/MemoryTimeline.vue'
 import PersonaManager from '@/components/persona/PersonaManager.vue'
 import StructureChart from '@/components/persona/StructureChart.vue'
@@ -20,6 +21,7 @@ import type { CurvePoint } from '@/components/persona/EvolutionCurve.vue'
 import { generateMonologue } from '@/persona/monologue'
 import { useChatStore } from '@/stores/chat'
 import { useEvolutionStore } from '@/stores/evolution'
+import { saveEvolving } from '@/storage/personaRepo'
 
 const chat = useChatStore()
 const evo = useEvolutionStore()
@@ -83,6 +85,31 @@ async function onSwitch(personaId: string) {
 async function onImported(personaId: string) {
   await onSwitch(personaId)
 }
+
+/* ---------------- 心情与未聊完的话（陪伴感切片 1/2） ---------------- */
+
+const currentMood = computed(() => chat.persona.evolving?.mood)
+const openLoops = computed(() => (chat.persona.evolving?.loops ?? []).filter((l) => !l.closed))
+
+function loopKindLabel(kind: string): string {
+  return kind === 'question' ? '你还没答的' : kind === 'promise' ? '你们的约定' : '会有后续的'
+}
+
+/** 手动闭环：她不用再提这件事（比如用户觉得她理解错了） */
+async function closeLoop(id: string) {
+  const loops = (chat.persona.evolving.loops ?? []).map((l) =>
+    l.id === id ? { ...l, closed: true } : l,
+  )
+  chat.persona.evolving = { ...chat.persona.evolving, loops }
+  await saveEvolving(chat.persona.id, chat.persona.evolving)
+}
+
+/** 称呼与关系保存后：让对话 store 用新档案（parts 要重渲染），并刷新本页数据 */
+async function onIdentitySaved(next: import('@/persona/schema').PersonaProfile) {
+  chat.persona = next
+  await evo.load(next.id)
+  void chat.refreshPersonaList()
+}
 </script>
 
 <template>
@@ -107,6 +134,14 @@ async function onImported(personaId: string) {
       <!-- 数据与权利（R8）：撤回同意 / 删除全部数据 -->
       <DataRightsPanel />
 
+      <!-- 称呼与关系：事后微调（希儿案例的补丁 —— 老档案没有编辑入口） -->
+      <IdentityEditor
+        v-if="evo.persona"
+        :key="evo.persona.id"
+        :persona="evo.persona"
+        @saved="onIdentitySaved"
+      />
+
       <!-- 两张图：不变的 + 变化的 -->
       <div class="grid gap-4 lg:grid-cols-2">
         <section class="rounded-2xl bg-white/60 p-5">
@@ -125,6 +160,44 @@ async function onImported(personaId: string) {
           <EvolutionCurve :points="curvePoints" />
         </section>
       </div>
+
+      <!-- 心情与没聊完的话（陪伴感切片 1/2，2026-10-08） -->
+      <section class="rounded-2xl bg-white/60 p-5">
+        <h2 class="m-0 mb-1 text-base tracking-wide">她现在</h2>
+        <p v-if="currentMood?.label" class="m-0 text-sm leading-relaxed tracking-wide text-[#3a3a3a]/80">
+          心情：<span class="text-[#4a6fa5]">{{ currentMood.label }}</span>
+          <span v-if="currentMood.reason" class="text-[#3a3a3a]/55">（因为{{ currentMood.reason }}）</span>
+        </p>
+        <p v-else class="m-0 text-sm leading-relaxed tracking-wide text-[#3a3a3a]/45">
+          心情平静 —— 聊出起伏的时候，这里会记录下来。
+        </p>
+
+        <div v-if="openLoops.length" class="mt-3 border-t border-[#4a6fa5]/10 pt-3">
+          <p class="m-0 mb-2 text-xs tracking-wide text-[#3a3a3a]/55">
+            没聊完的话 —— 她会在合适的时候自然提起（每件最多主动提一次）：
+          </p>
+          <div class="space-y-1.5">
+            <div
+              v-for="l in openLoops"
+              :key="l.id"
+              class="flex items-center gap-2.5"
+            >
+              <span class="shrink-0 rounded-full bg-[#d4a373]/12 px-2.5 py-0.5 text-xs tracking-wide text-[#d4a373]">
+                {{ loopKindLabel(l.kind) }}
+              </span>
+              <span class="min-w-0 flex-1 truncate text-sm tracking-wide text-[#3a3a3a]/75">{{ l.content }}</span>
+              <button
+                type="button"
+                class="shrink-0 rounded-full bg-white/60 px-2.5 py-1 text-xs tracking-wide text-[#3a3a3a]/45 hover:bg-white/85"
+                title="她不再提这件事"
+                @click="closeLoop(l.id)"
+              >
+                不用提了
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- 内心独白 -->
       <section class="rounded-2xl bg-white/60 p-5">

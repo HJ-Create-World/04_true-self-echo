@@ -33,7 +33,7 @@ import {
   type CustomConnection,
 } from '@/api/apiConfig'
 import { useChatStore } from '@/stores/chat'
-import { loadWeatherCity, saveWeatherCity } from '@/core/reality'
+import { loadWeatherCity, loadWorldNotes, saveWeatherCity, saveWorldNotes } from '@/core/reality'
 
 const chat = useChatStore()
 
@@ -65,6 +65,14 @@ const weatherCity = ref(loadWeatherCity())
 function saveCity() {
   saveWeatherCity(weatherCity.value)
   notice.value = weatherCity.value.trim() ? `已保存，${weatherCity.value.trim()}的天气会进入她的感知` : '已清空天气感知'
+}
+
+/** 最近的世界（共享语境）：用户顺手贴几条，她就能接住现实话题 */
+const worldNotes = ref(loadWorldNotes())
+
+function saveWorld() {
+  saveWorldNotes(worldNotes.value)
+  notice.value = '已更新 —— 她接下来的对话里会带着这些「最近刷到过的事」'
 }
 
 const providers = ref<ProviderInfo[]>([])
@@ -555,6 +563,26 @@ async function testCustom() {
             type="button"
             class="rounded-full bg-[#4a6fa5] px-4 py-1.5 text-xs tracking-wide text-white transition-all duration-500 ease-in-out hover:opacity-90 active:scale-[0.98]"
             @click="saveCity"
+          >
+            保存
+          </button>
+        </div>
+
+        <div class="mt-4 border-t border-[#4a6fa5]/10 pt-4">
+          <label class="mb-1.5 block text-xs tracking-wide text-[#3a3a3a]/60" for="world-notes">
+            最近的世界（一行一条，她只会有个「刷到过」的印象，不会假装什么都懂）
+          </label>
+          <textarea
+            id="world-notes"
+            v-model="worldNotes"
+            rows="4"
+            placeholder="例如：&#10;某品牌昨天发了新手机，摄像头很强&#10;最近那个游戏的新角色很火&#10;小区门口在修路"
+            class="w-full rounded-xl bg-white/75 px-3 py-2 text-xs leading-relaxed tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+          />
+          <button
+            type="button"
+            class="mt-2 rounded-full bg-[#4a6fa5] px-4 py-1.5 text-xs tracking-wide text-white transition-all duration-500 ease-in-out hover:opacity-90 active:scale-[0.98]"
+            @click="saveWorld"
           >
             保存
           </button>
