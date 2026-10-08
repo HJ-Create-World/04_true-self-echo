@@ -77,7 +77,7 @@ const selectedModelKey = computed({
 
 
 watch(
-  () => [chat.messages.length, chat.monologueEcho],
+  () => chat.messages.length,
   () => {
     const last = chat.messages[chat.messages.length - 1]
     if (last?.role === 'assistant' && detectCrisis(last.content)) crisisShown.value = true
@@ -97,7 +97,6 @@ async function submit() {
   if (detectCrisis(text)) crisisShown.value = true
   wellbeing.onMessage()
   draft.value = ''
-  chat.clearMonologueEcho() // 用户接话后独白即消失（她没说出口的话，不留着）
   // 生成中不再拦截 —— send() 内部入队（用户连发，AI 回完一起看到）
   await chat.send(text)
 }
@@ -167,15 +166,8 @@ async function reset() {
         :role="m.role"
         :content="m.content"
         :degraded="m.degraded"
+        :monologue="m.monologue"
       />
-
-      <!-- 主动消息附带的内心独白：即抛即用，不落库；用户接话即消失 -->
-      <p
-        v-if="chat.monologueEcho"
-        class="pl-6 text-sm italic tracking-wide text-[#3a3a3a]/40"
-      >
-        她心想：{{ chat.monologueEcho }}
-      </p>
 
       <p v-if="chat.streaming" class="pl-6 text-sm tracking-wide text-[#3a3a3a]/45">
         正在回响……

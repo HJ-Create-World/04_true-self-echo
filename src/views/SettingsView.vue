@@ -33,6 +33,7 @@ import {
   type CustomConnection,
 } from '@/api/apiConfig'
 import { useChatStore } from '@/stores/chat'
+import { loadWeatherCity, saveWeatherCity } from '@/core/reality'
 
 const chat = useChatStore()
 
@@ -56,6 +57,14 @@ function updateProCfg(patch: Partial<ProactiveConfig>) {
 function resetProCfg() {
   proCfg.value = { ...DEFAULT_PROACTIVE }
   saveProactiveConfig(proCfg.value)
+}
+
+/** 她的现实感知 —— 城市名（可选，用于天气；open-meteo 免 key） */
+const weatherCity = ref(loadWeatherCity())
+
+function saveCity() {
+  saveWeatherCity(weatherCity.value)
+  notice.value = weatherCity.value.trim() ? `已保存，${weatherCity.value.trim()}的天气会进入她的感知` : '已清空天气感知'
 }
 
 const providers = ref<ProviderInfo[]>([])
@@ -524,6 +533,34 @@ async function testCustom() {
         </p>
       </section>
 
+      <!-- 她的现实感知（2026-10-08）：时间日期恒定注入，天气可选 -->
+      <section class="rounded-2xl bg-white/60 p-6">
+        <header class="mb-4">
+          <h2 class="m-0 text-base tracking-wide">她的现实感知</h2>
+          <p class="mb-0 mt-1.5 text-xs leading-relaxed tracking-wide text-[#3a3a3a]/50">
+            日期、星期、时段、季节每轮都会让她知道（不需要配置）。
+            填了城市后，她还能知道当地现在的天气（公开天气源，无需 API Key，不填就没有）。
+          </p>
+        </header>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <label class="text-xs tracking-wide text-[#3a3a3a]/60" for="weather-city">她所在的城市</label>
+          <input
+            id="weather-city"
+            v-model="weatherCity"
+            placeholder="如：合肥（留空则不感知天气）"
+            class="w-48 rounded-xl bg-white/75 px-3 py-2 text-xs tracking-wide text-[#3a3a3a] placeholder:text-[#3a3a3a]/35 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30"
+            @keydown.enter="saveCity"
+          />
+          <button
+            type="button"
+            class="rounded-full bg-[#4a6fa5] px-4 py-1.5 text-xs tracking-wide text-white transition-all duration-500 ease-in-out hover:opacity-90 active:scale-[0.98]"
+            @click="saveCity"
+          >
+            保存
+          </button>
+        </div>
+      </section>
+
       <!-- 主动对话（2026-09-29 体验迭代）：让 TA 先开口 -->
       <section class="rounded-2xl bg-white/60 p-6">
         <header class="mb-4">
@@ -599,7 +636,7 @@ async function testCustom() {
               class="h-4 w-4 accent-[#4a6fa5]"
               @change="updateProCfg({ monologuePrefix: !proCfg.monologuePrefix })"
             />
-            TA 主动说话时，附带一句内心独白（「她心想：……」；每次主动会多一次模型调用）
+            显示她的内心独白（偶尔，她说出口之前的真实想法，以「她心想」小字出现在消息里；不影响对话生成）
           </label>
 
           <div class="pt-1">

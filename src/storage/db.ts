@@ -28,6 +28,12 @@ export interface MessageRow {
   elapsedMs?: number
   /** 上游 finish_reason，排障用 */
   finishReason?: string
+  /**
+   * 内心独白（2026-10-08 内联独白）：她说出口之前的真实想法。
+   * ⚠️ 落库展示用，**构建上游历史时只发 content** —— 独白是「对方看不见的」，
+   * 发回去等于她知道自己上轮暴露了心声。
+   */
+  monologue?: string
 }
 
 export interface ConversationRow {

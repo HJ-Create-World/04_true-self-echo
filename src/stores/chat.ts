@@ -18,7 +18,7 @@ function isNative(): boolean {
 }
 
 import { getSelectedModel, listCustomConnections, loadApiConfig } from '@/api/apiConfig'
-import { burstDelay, sleep, splitBurst } from '@/core/burst'
+import { burstDelay, extractMonologue, sleep, splitBurst } from '@/core/burst'
 import {
   GREETING_INSTRUCTION,
   PROACTIVE,
@@ -27,7 +27,7 @@ import {
   loadProactiveConfig,
   loadProactiveEnabled,
 } from '@/core/proactive'
-import { generateMonologue } from '@/persona/monologue'
+import { renderRealityBlock } from '@/core/reality'
 import type { SystemPromptParts, TurnMessage } from '@/core/prompt'
 import { buildMessages, trimHistory } from '@/core/prompt'
 import { renderMemoryBlock } from '@/memory/inject'
@@ -291,7 +291,11 @@ export const useChatStore = defineStore('chat', () => {
       // 人格正文用缓存好的 parts；**记忆区是每轮现算的** ——
       // 它依赖本轮输入（关键词触发），所以不能进缓存。
       const sel = selectMemories(persona.value.evolving.memories, merged)
-      const withMemory: SystemPromptParts = { ...parts.value, memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation) }
+      const withMemory: SystemPromptParts = {
+        ...parts.value,
+        realityBlock: await renderRealityBlock(),
+        memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation),
+      }
       memoryMeta.value = sel.pinned.length + sel.triggered.length
         ? `记忆 ${sel.pinned.length}+${sel.triggered.length} 条`
         : ''
@@ -322,8 +326,10 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /**
-   * 一次生成 → 拆条 → 逐条延迟落库显示（A1 AI 连发）。
+   * 一次生成 → 剥独白 → 拆条 → 逐条延迟落库显示（A1 AI 连发）。
    *
+   * 独白（〔心想〕行）先剥掉再拆条：落库跟随第一条消息（回放可见），
+   * 是否显示由设置开关决定 —— 但**无论开关都必须剥**（防历史污染，见 extractMonologue）。
    * 第一条立即出现（用户已经等了整个生成时长），后续每条按前一条的
    * 「打字时长」延迟 —— 像对方在一条接一条地发，而不是倒出一段作文。
    * degraded 标注只挂第一条：它描述的是整次生成，不用每条都吓人。
@@ -331,7 +337,9 @@ export const useChatStore = defineStore('chat', () => {
    * 返回最后一条消息的 id（快照的 messageId 用）。
    */
   async function deliverBurst(res: ChatResponse): Promise<number> {
-    const burst = splitBurst(res.content)
+    const { monologue, rest } = extractMonologue(res.content)
+    const showMono = monologue !== '' && loadProactiveConfig().monologuePrefix
+    const burst = splitBurst(rest)
     let lastId = 0
     for (let i = 0; i < burst.length; i++) {
       if (i > 0) await sleep(burstDelay(burst[i - 1]))
@@ -345,6 +353,8 @@ export const useChatStore = defineStore('chat', () => {
         model: res.model,
         elapsedMs: res.elapsedMs,
         finishReason: res.finishReason,
+        // 独白挂第一条消息；开关关闭时剥掉但不落库（用户不想看，也别存）
+        monologue: i === 0 && monologue !== '' && showMono ? monologue : undefined,
       }
       const id = await appendMessage(row)
       messages.value.push({ ...row, id })
@@ -410,26 +420,22 @@ export const useChatStore = defineStore('chat', () => {
     if (streaming.value || conversationId.value === null) return
     error.value = null
     streaming.value = true
-    monologueEcho.value = ''
     try {
       const history = toHistory()
       // 记忆照常注入 —— 主动开口也该记得对方的事（触发词用最近一条用户消息）
       const recentUser =
         [...messages.value].reverse().find((m) => m.role === 'user')?.content ?? ''
       const sel = selectMemories(persona.value.evolving.memories, recentUser)
-      const withMemory: SystemPromptParts = { ...parts.value, memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation) }
+      const withMemory: SystemPromptParts = {
+        ...parts.value,
+        realityBlock: await renderRealityBlock(),
+        memoryBlock: renderMemoryBlock(sel, persona.value.evolving.relation),
+      }
       const wire = buildMessages(
         withMemory,
         history,
         kind === 'greet' ? GREETING_INSTRUCTION : SILENCE_INSTRUCTION,
       )
-
-      // 独白前缀（HJ 2026-09-29 拍板：可开关，默认关）——
-      // 与消息生成**并行**发出，不增加总等待；失败静默（独白本来就是即抛即用）
-      const cfg = loadProactiveConfig()
-      const monologuePromise = cfg.monologuePrefix
-        ? generateMonologue(parts.value, history.slice(-4), currentProvider.value).catch(() => null)
-        : null
 
       const res = await sendChat({
         provider: currentProvider.value,
@@ -438,12 +444,7 @@ export const useChatStore = defineStore('chat', () => {
         userInput: wire[wire.length - 1].content,
       })
 
-      if (monologuePromise) {
-        const mono = await monologuePromise
-        // 独白不落库（monologue.ts 的设计决定：她没说出口的话），只在本次展示
-        if (mono?.text) monologueEcho.value = mono.text
-      }
-
+      // 独白走同一条内联解析（deliverBurst），不再单独调模型 —— 省一次调用
       await deliverBurst(res)
       memoryMeta.value = kind === 'greet' ? '主动开场' : '主动找你'
       // 主动发言也是一次「活动」—— 下一次沉默触发从这条算起
@@ -453,12 +454,6 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       streaming.value = false
     }
-  }
-
-  /** 主动消息附带的内心独白（即抛即用，不落库；UI 显示在她气泡上方） */
-  const monologueEcho = ref('')
-  function clearMonologueEcho(): void {
-    monologueEcho.value = ''
   }
 
   /** L1：进对话页时判断要不要主动开场（每次进页最多一条） */
@@ -603,8 +598,5 @@ function fmtTokens(n: number): string {
     maybeGreet,
     startProactive,
     stopProactive,
-    /** 主动消息附带的内心独白（即抛即用）与清除 */
-    monologueEcho,
-    clearMonologueEcho,
   }
 })

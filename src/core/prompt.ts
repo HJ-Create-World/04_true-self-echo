@@ -40,6 +40,11 @@ export interface SystemPromptParts {
    */
   styleBlock?: string
   /**
+   * 现实区（可选，2026-10-08）—— 日期/星期/时段/季节（+可选天气），每轮现算。
+   * 不能进缓存的 parts：时间是流动的。位置在形态区之后、记忆区之前。
+   */
+  realityBlock?: string
+  /**
    * 记忆区（可选，Phase 3）—— 关于对方的事，来自过往对话。
    *
    * ⚠️ 空字符串会被滤掉，所以没有记忆时区块完全不存在，
@@ -62,7 +67,7 @@ export interface ReinjectionPayload {
  * 组装 system。
  * 拼接顺序是唯一真理来源，不要在任何地方另拼一份。
  *
- * 段顺序：[约束头, 人格正文, 形态区(可选), 记忆区(可选), 约束尾]。
+ * 段顺序：[约束头, 人格正文, 形态区(可选), 现实区(可选), 记忆区(可选), 约束尾]。
  * 「头在最顶 / 尾在最末」是 E5 验证过的两条不变量，中间插段不破坏它们。
  * 空字符串会被滤掉，可选区块不存在时完全不留痕。
  */
@@ -71,6 +76,7 @@ export function buildSystemPrompt(parts: SystemPromptParts): string {
     parts.constraintsHead,
     parts.personaBody,
     parts.styleBlock,
+    parts.realityBlock,
     parts.memoryBlock,
     parts.constraintsTail,
   ]

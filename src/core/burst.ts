@@ -64,3 +64,25 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     }, { once: true })
   })
 }
+
+/* ------------------------------------------------------------------ */
+/* 内心独白（〔心想〕行）—— 主调用内联输出，零额外成本                    */
+/* ------------------------------------------------------------------ */
+
+/** 独白行的前缀标记 —— 与 DIALOGUE_STYLE 第六条约定保持一致 */
+const MONOLOGUE_RE = /(?:^|\n)\s*〔心想〕\s*([^\n]+)\n?/
+
+/**
+ * 从生成内容里剥出独白行。
+ *
+ * 🔴 **无论显示开关开不开都必须剥**：独白是「说出口之前的心声」，
+ * 留在 content 里会落库、会进下一轮历史 —— 模型会看到自己上轮的
+ * 「对方看不见的内心话」，出戏还费 token。
+ *
+ * 无独白时返回原内容（零损耗路径）。
+ */
+export function extractMonologue(content: string): { monologue: string; rest: string } {
+  const m = content.match(MONOLOGUE_RE)
+  if (!m) return { monologue: '', rest: content }
+  return { monologue: m[1].trim(), rest: content.replace(MONOLOGUE_RE, '\n').trim() }
+}

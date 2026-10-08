@@ -7,7 +7,7 @@
  * - 延迟曲线：基础值、随字数递增、封顶
  */
 
-import { MAX_BURST, burstDelay, splitBurst } from '../src/core/burst.ts'
+import { MAX_BURST, burstDelay, extractMonologue, splitBurst } from '../src/core/burst.ts'
 
 const results = []
 const check = (id, ok, detail = '') => results.push(`${ok ? '✅' : '❌'} ${id} ${detail}`)
@@ -51,6 +51,15 @@ check('纯空白 → 空数组', splitBurst('  \n\n \n').length === 0)
 check('短消息 ≈ 基础延迟', burstDelay('hi') === 600 + 2 * 40, `${burstDelay('hi')}ms`)
 check('随字数递增', burstDelay('一二三四五六七八九十') > burstDelay('一二三'))
 check('封顶 3200ms', burstDelay('x'.repeat(500)) === 3200, `${burstDelay('x'.repeat(500))}ms`)
+
+/* ---------- extractMonologue：内联独白（2026-10-08） ---------- */
+const withMono = extractMonologue('〔心想〕他今天好像有点累\n\n在的呀～\n\n怎么啦')
+check('剥出独白', withMono.monologue === '他今天好像有点累', JSON.stringify(withMono.monologue))
+check('剩余内容不含独白行', !withMono.rest.includes('〔心想〕') && withMono.rest.includes('在的呀～'))
+const noMono = extractMonologue('普通的回复，没有独白')
+check('无独白时原样返回', noMono.monologue === '' && noMono.rest === '普通的回复，没有独白')
+const monoMid = extractMonologue('第一句\n〔心想〕忽然想起昨天的事\n第二句')
+check('独白夹在中间也能剥出', monoMid.monologue === '忽然想起昨天的事' && monoMid.rest === '第一句\n第二句', JSON.stringify(monoMid))
 
 /* ---------- 汇总 ---------- */
 const failed = results.filter((r) => r.startsWith('❌'))
