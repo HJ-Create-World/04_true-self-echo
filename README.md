@@ -11,9 +11,7 @@ related: [docs/01_product/PRODUCT, docs/00_meta/STATUS]
 
 `true-self-echo` ｜ 曾用名 `persona-forge`（人格工坊）· 2026-09-18 更名
 
-
-Uploading true-self-echo-intro.mp4…
-
+https://github.com/user-attachments/assets/c33235cf-c039-4ee6-9845-dfade5ed3194
 
 > 一个既好用、又能让你看见它内心在发生什么的 AI 伙伴。
 
